@@ -1,23 +1,15 @@
-import { shopifyApi, LATEST_API_VERSION, Session } from '@shopify/shopify-api';
+import { shopifyApi, LATEST_API_VERSION } from '@shopify/shopify-api';
 import '@shopify/shopify-api/adapters/node';
 
-// Validate required environment variables
-const requiredEnvVars = ['SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'NEXT_PUBLIC_APP_URL'];
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    console.warn(`Warning: ${envVar} is not set`);
-  }
-}
-
-// Initialize Shopify API
-export const shopify = shopifyApi({
+// Initialize Shopify API (only on server-side)
+export const shopify = typeof window === 'undefined' ? shopifyApi({
   apiKey: process.env.SHOPIFY_API_KEY || '',
   apiSecretKey: process.env.SHOPIFY_API_SECRET || '',
   scopes: (process.env.SHOPIFY_SCOPES || 'read_themes,read_products').split(','),
   hostName: (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/https?:\/\//, ''),
   apiVersion: LATEST_API_VERSION,
-  isEmbeddedApp: false, // Set to true if you want embedded app
-});
+  isEmbeddedApp: true,
+}) : null;
 
 // Generate OAuth authorization URL
 export function generateAuthUrl(shop: string, redirectUri: string, state: string): string {
@@ -104,6 +96,7 @@ export function createShopifyClient(shop: string, accessToken: string) {
 
 // Verify Shopify webhook HMAC
 export function verifyWebhook(body: string, hmac: string): boolean {
+  if (typeof window !== 'undefined') return false;
   const crypto = require('crypto');
   const secret = process.env.SHOPIFY_API_SECRET || '';
   const generatedHmac = crypto
@@ -125,6 +118,7 @@ export function isValidShopDomain(shop: string): boolean {
 
 // Generate random state for OAuth
 export function generateState(): string {
+  if (typeof window !== 'undefined') return '';
   const crypto = require('crypto');
   return crypto.randomBytes(16).toString('hex');
 }
