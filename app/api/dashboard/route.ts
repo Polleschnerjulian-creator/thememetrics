@@ -3,7 +3,29 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { db, schema } from '@/lib/db';
-import { eq, desc, and, gte } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
+
+interface Section {
+  id: number;
+  name: string;
+  type: string | null;
+  complexityScore: number | null;
+  estimatedLoadTimeMs: number | null;
+  hasVideo: boolean | null;
+  hasAnimations: boolean | null;
+}
+
+interface Recommendation {
+  id: number;
+  type: string | null;
+  severity: string | null;
+  title: string | null;
+  description: string | null;
+  fix: string | null;
+  impactScore: number | null;
+  effortScore: number | null;
+  estimatedRevenueImpact: number | null;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -46,11 +68,11 @@ export async function GET(request: NextRequest) {
       orderBy: [desc(schema.performanceSnapshots.createdAt)],
     });
     
-    const sections = await db.query.sections.findMany({
+    const sections: Section[] = await db.query.sections.findMany({
       where: eq(schema.sections.themeId, theme.id),
     });
     
-    const recommendations = await db.query.recommendations.findMany({
+    const recommendations: Recommendation[] = await db.query.recommendations.findMany({
       where: and(
         eq(schema.recommendations.storeId, store.id),
         eq(schema.recommendations.status, 'open')
@@ -59,8 +81,8 @@ export async function GET(request: NextRequest) {
       limit: 10,
     });
     
-    const totalLoadTime = sections.reduce((sum, s) => sum + (s.estimatedLoadTimeMs || 0), 0);
-    const criticalIssues = recommendations.filter(r => r.severity === 'critical').length;
+    const totalLoadTime = sections.reduce((sum: number, s: Section) => sum + (s.estimatedLoadTimeMs || 0), 0);
+    const criticalIssues = recommendations.filter((r: Recommendation) => r.severity === 'critical').length;
     
     return NextResponse.json({
       store: {
@@ -86,7 +108,7 @@ export async function GET(request: NextRequest) {
         criticalIssues,
         issuesChange: 0,
       },
-      sections: sections.map(s => ({
+      sections: sections.map((s: Section) => ({
         id: s.id,
         name: s.name,
         type: s.type,
@@ -95,7 +117,7 @@ export async function GET(request: NextRequest) {
         hasVideo: s.hasVideo,
         hasAnimations: s.hasAnimations,
       })),
-      recommendations: recommendations.map(r => ({
+      recommendations: recommendations.map((r: Recommendation) => ({
         id: r.id,
         type: r.type,
         severity: r.severity,

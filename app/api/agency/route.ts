@@ -1,9 +1,28 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
+
+interface Workspace {
+  id: number;
+  name: string;
+  shopDomain: string;
+  clientAccessEnabled: boolean | null;
+  clientAccessToken: string | null;
+  isActive: boolean | null;
+  notes: string | null;
+  createdAt: Date | null;
+}
+
+interface TeamMember {
+  id: number;
+  email: string;
+  name: string | null;
+  role: string;
+  inviteStatus: string | null;
+  lastActiveAt: Date | null;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -56,11 +75,11 @@ export async function GET(request: NextRequest) {
         });
     }
 
-    const workspaces: any[] = await db.query.workspaces.findMany({
+    const workspaces: Workspace[] = await db.query.workspaces.findMany({
       where: eq(schema.workspaces.agencyId, agency.id),
     });
 
-    const teamMembers: any[] = await db.query.teamMembers.findMany({
+    const teamMembers: TeamMember[] = await db.query.teamMembers.findMany({
       where: eq(schema.teamMembers.agencyId, agency.id),
     });
 
@@ -73,7 +92,7 @@ export async function GET(request: NextRequest) {
         maxWorkspaces: agency.maxWorkspaces,
         maxTeamMembers: agency.maxTeamMembers,
       },
-      workspaces: workspaces.map((w: any) => ({
+      workspaces: workspaces.map((w: Workspace) => ({
         id: w.id,
         name: w.name,
         shopDomain: w.shopDomain,
@@ -83,7 +102,7 @@ export async function GET(request: NextRequest) {
         notes: w.notes,
         createdAt: w.createdAt,
       })),
-      teamMembers: teamMembers.map((m: any) => ({
+      teamMembers: teamMembers.map((m: TeamMember) => ({
         id: m.id,
         email: m.email,
         name: m.name,
@@ -130,7 +149,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Agency not found' }, { status: 404 });
     }
 
-    const updateData: any = { updatedAt: new Date() };
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (body.name) updateData.name = body.name;
     if (body.logoBase64) updateData.logoBase64 = body.logoBase64;
     if (body.logoUrl) updateData.logoUrl = body.logoUrl;

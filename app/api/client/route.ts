@@ -1,9 +1,29 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, desc } from 'drizzle-orm';
+
+interface SectionAnalysis {
+  id: number;
+  sectionName: string;
+  sectionType: string | null;
+  category: string | null;
+  performanceScore: number;
+  recommendations: unknown;
+}
+
+interface ThemeAnalysis {
+  id: number;
+  themeName: string | null;
+  analyzedAt: Date | null;
+  overallScore: number;
+  totalSections: number | null;
+  lcpMs: number | null;
+  clsScore: number | null;
+  tbtMs: number | null;
+  fcpMs: number | null;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -70,34 +90,37 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const latestAnalysis = await db.query.themeAnalyses.findFirst({
+    const latestAnalysis: ThemeAnalysis | undefined = await db.query.themeAnalyses.findFirst({
       where: eq(schema.themeAnalyses.storeId, store.id),
       orderBy: desc(schema.themeAnalyses.analyzedAt),
     });
 
-    const sectionAnalyses: any[] = latestAnalysis 
+    const sectionAnalyses: SectionAnalysis[] = latestAnalysis 
       ? await db.query.sectionAnalyses.findMany({
           where: eq(schema.sectionAnalyses.analysisId, latestAnalysis.id),
         })
       : [];
 
-    const analysisHistory: any[] = await db.query.themeAnalyses.findMany({
+    const analysisHistory: ThemeAnalysis[] = await db.query.themeAnalyses.findMany({
       where: eq(schema.themeAnalyses.storeId, store.id),
       orderBy: desc(schema.themeAnalyses.analyzedAt),
       limit: 10,
     });
 
-    const criticalSections = sectionAnalyses.filter((s: any) => s.performanceScore < 40).length;
-    const warningSections = sectionAnalyses.filter((s: any) => s.performanceScore >= 40 && s.performanceScore < 60).length;
-    const goodSections = sectionAnalyses.filter((s: any) => s.performanceScore >= 60).length;
+    const criticalSections = sectionAnalyses.filter((s: SectionAnalysis) => s.performanceScore < 40).length;
+    const warningSections = sectionAnalyses.filter((s: SectionAnalysis) => s.performanceScore >= 40 && s.performanceScore < 60).length;
+    const goodSections = sectionAnalyses.filter((s: SectionAnalysis) => s.performanceScore >= 60).length;
 
     const topRecommendations = sectionAnalyses
-      .flatMap((s: any) => ((s.recommendations || []) as string[]).map((r: string) => ({
-        section: s.sectionName,
-        recommendation: r,
-        score: s.performanceScore,
-      })))
-      .filter((r: any) => r.score < 60)
+      .flatMap((s: SectionAnalysis) => {
+        const recs = (s.recommendations || []) as string[];
+        return recs.map((r: string) => ({
+          section: s.sectionName,
+          recommendation: r,
+          score: s.performanceScore,
+        }));
+      })
+      .filter((r: { score: number }) => r.score < 60)
       .slice(0, 10);
 
     return NextResponse.json({
@@ -130,7 +153,7 @@ export async function GET(request: NextRequest) {
           good: goodSections,
           total: sectionAnalyses.length,
         },
-        sections: sectionAnalyses.map((s: any) => ({
+        sections: sectionAnalyses.map((s: SectionAnalysis) => ({
           name: s.sectionName,
           type: s.sectionType,
           category: s.category,
@@ -138,7 +161,7 @@ export async function GET(request: NextRequest) {
           recommendationsCount: ((s.recommendations || []) as string[]).length,
         })),
         recommendations: topRecommendations,
-        history: analysisHistory.map((a: any) => ({
+        history: analysisHistory.map((a: ThemeAnalysis) => ({
           score: a.overallScore,
           date: a.analyzedAt,
           themeName: a.themeName,
