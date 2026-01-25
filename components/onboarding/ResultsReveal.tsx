@@ -210,7 +210,7 @@ export function ResultsReveal() {
               onClick={() => setStep('money-impact')}
               className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-2xl font-semibold transition-all flex items-center justify-center gap-2 group"
             >
-              {isGoodScore ? 'Was kann ich noch gewinnen?' : 'Was kostet mich das?'}
+              Potenzial ansehen
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
@@ -221,45 +221,73 @@ export function ResultsReveal() {
 
   // Money Impact Screen (the AHA moment!)
   if (currentStep === 'money-impact') {
+    const hasRealData = results.dataSource === 'shopify';
+    const showMoneyValues = results.totalMonthlyLoss > 0;
+    
     return (
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div className="bg-card rounded-3xl max-w-md w-full overflow-hidden shadow-2xl">
           {/* Header */}
-          <div className="bg-gradient-to-r from-red-500 to-orange-500 p-6 text-white text-center">
-            <DollarSign className="w-12 h-12 mx-auto mb-2 opacity-80" />
-            <p className="text-white/80 mb-1">Diese Sections kosten dich</p>
-            <p className="text-5xl font-bold">~€{results.totalMonthlyLoss.toLocaleString('de-DE')}</p>
-            <p className="text-white/80 mt-1">pro Monat an verlorener Conversion</p>
+          <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-6 text-white text-center">
+            <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-80" />
+            <p className="text-white/80 mb-1">Dein geschätztes Optimierungspotenzial</p>
+            {showMoneyValues ? (
+              <>
+                <p className="text-5xl font-bold">~€{results.totalMonthlyLoss.toLocaleString('de-DE')}</p>
+                <p className="text-white/80 mt-1">pro Monat zusätzlicher Umsatz möglich</p>
+              </>
+            ) : (
+              <>
+                <p className="text-3xl font-bold">Wird berechnet...</p>
+                <p className="text-white/80 mt-1">Basierend auf deinen Shop-Daten</p>
+              </>
+            )}
           </div>
 
           <div className="p-6">
             {/* Breakdown */}
-            <div className="space-y-3 mb-6">
-              {results.criticalSections.slice(0, 4).map((section, i) => (
-                <div 
-                  key={i}
-                  className="flex items-center justify-between p-3 bg-muted/50 rounded-xl"
-                >
-                  <span className="text-foreground">{section.name}</span>
-                  <span className="font-semibold text-red-600 dark:text-red-400">
-                    -€{section.monthlyLoss.toLocaleString('de-DE')}/Mo
-                  </span>
-                </div>
-              ))}
-            </div>
+            {showMoneyValues && (
+              <div className="space-y-3 mb-4">
+                {results.criticalSections.slice(0, 4).map((section, i) => (
+                  <div 
+                    key={i}
+                    className="flex items-center justify-between p-3 bg-muted/50 rounded-xl"
+                  >
+                    <span className="text-foreground">{section.name}</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      +€{section.monthlyLoss.toLocaleString('de-DE')}/Mo
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
 
-            {/* Calculation basis */}
-            <p className="text-xs text-muted-foreground text-center mb-6">
-              Basierend auf 7% Conversion-Verlust pro Sekunde über 2s Ladezeit (Industry Benchmark)
-            </p>
+            {/* Data source & Disclaimer */}
+            <div className="bg-muted/30 rounded-xl p-3 mb-6">
+              <p className="text-xs text-muted-foreground text-center">
+                {hasRealData ? (
+                  <>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ Basierend auf deinen echten Shopify-Umsatzdaten</span>
+                    <br />
+                    Berechnung: 7% Conversion-Verlust pro Sekunde Ladezeit (Industry Standard)
+                  </>
+                ) : (
+                  <>
+                    <span className="text-amber-600 dark:text-amber-400 font-medium">Schätzung basierend auf Industry Benchmarks</span>
+                    <br />
+                    Für genauere Werte benötigen wir Zugriff auf deine Shop-Analytics
+                  </>
+                )}
+              </p>
+            </div>
 
             {/* CTA */}
             <button
               onClick={() => setStep('first-fix')}
-              className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-2xl font-semibold transition-all flex items-center justify-center gap-2 group"
+              className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white rounded-2xl font-semibold transition-all flex items-center justify-center gap-2 group"
             >
               <Sparkles className="w-5 h-5" />
-              Zeig mir wie ich das fixe
+              Optimierung starten
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
 

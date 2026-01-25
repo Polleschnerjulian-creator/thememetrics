@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { 
   useOnboarding,
   WelcomeModal, 
@@ -25,35 +25,15 @@ interface OnboardingWrapperProps {
   isAnalyzing: boolean;
 }
 
-function calculateResults(analysisData: OnboardingWrapperProps['analysisData']) {
-  if (!analysisData) return null;
-  
-  const criticalSections = analysisData.sections
-    .filter(s => s.performanceScore < 85)
-    .sort((a, b) => a.performanceScore - b.performanceScore)
-    .slice(0, 5)
-    .map(s => ({
-      name: s.name.replace('.liquid', ''),
-      score: s.performanceScore,
-      monthlyLoss: Math.max(50, Math.round((85 - s.performanceScore) * 8)),
-    }));
-
-  const sectionsToShow = criticalSections.length > 0 ? criticalSections : [
-    { name: 'Allgemeine Optimierung', score: analysisData.score, monthlyLoss: 127 }
-  ];
-
-  const totalMonthlyLoss = sectionsToShow.reduce((sum, s) => sum + s.monthlyLoss, 0);
-  
-  const percentile = analysisData.score >= 80 ? 75 : 
-                     analysisData.score >= 70 ? 55 :
-                     analysisData.score >= 60 ? 35 : 20;
-
-  return {
-    score: analysisData.score,
-    criticalSections: sectionsToShow,
-    totalMonthlyLoss,
-    percentile,
-  };
+interface RevenueData {
+  monthlyRevenue: number;
+  potentialMonthlyGain: number;
+  dataSource: 'shopify' | 'estimated';
+  sectionImpacts: Array<{
+    name: string;
+    currentScore: number;
+    monthlyImpact: number;
+  }>;
 }
 
 export function OnboardingWrapper({ 
@@ -74,17 +54,84 @@ export function OnboardingWrapper({
   
   const hasSetInitialResults = useRef(false);
   const analysisStarted = useRef(false);
+  const [revenueData, setRevenueData] = useState<RevenueData | null>(null);
+
+  // Fetch real revenue data from API
+  useEffect(() => {
+    if (shop && isOnboarding && analysisData) {
+      fetch(`/api/revenue?shop=${shop}`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.error) {
+            setRevenueData({
+              monthlyRevenue: data.monthlyRevenue,
+              potentialMonthlyGain: data.potentialMonthlyGain,
+              dataSource: data.dataSource,
+              sectionImpacts: data.sectionImpacts || [],
+            });
+          }
+        })
+        .catch(err => console.error('Revenue fetch error:', err));
+    }
+  }, [shop, isOnboarding, analysisData]);
 
   // Set results once when analysis data exists and we're onboarding
   useEffect(() => {
     if (analysisData && isOnboarding && !hasSetInitialResults.current) {
       hasSetInitialResults.current = true;
-      const calculatedResults = calculateResults(analysisData);
-      if (calculatedResults) {
-        setResults(calculatedResults);
-      }
+      
+      // Use revenue data if available, otherwise estimate conservatively
+      const sectionsToShow = revenueData?.sectionImpacts.length 
+        ? revenueData.sectionImpacts.map(s => ({
+            name: s.name.replace('.liquid', ''),
+            score: s.currentScore,
+            monthlyLoss: s.monthlyImpact,
+          }))
+        : analysisData.sections
+            .filter(s => s.performanceScore < 85)
+            .sort((a, b) => a.performanceScore - b.performanceScore)
+            .slice(0, 5)
+            .map(s => ({
+              name: s.name.replace('.liquid', ''),
+              score: s.performanceScore,
+              monthlyLoss: 0, // Will show "Berechnung läuft..."
+            }));
+
+      const totalMonthlyLoss = revenueData?.potentialMonthlyGain || 0;
+      
+      const percentile = analysisData.score >= 80 ? 75 : 
+                         analysisData.score >= 70 ? 55 :
+                         analysisData.score >= 60 ? 35 : 20;
+
+      setResults({
+        score: analysisData.score,
+        criticalSections: sectionsToShow.length > 0 ? sectionsToShow : [
+          { name: 'Optimierungspotenzial wird berechnet', score: analysisData.score, monthlyLoss: 0 }
+        ],
+        totalMonthlyLoss,
+        percentile,
+        dataSource: revenueData?.dataSource || 'estimated',
+      });
     }
-  }, [analysisData, isOnboarding, setResults]);
+  }, [analysisData, isOnboarding, setResults, revenueData]);
+
+  // Update results when revenue data arrives
+  useEffect(() => {
+    if (revenueData && results && isOnboarding) {
+      const sectionsToShow = revenueData.sectionImpacts.map(s => ({
+        name: s.name.replace('.liquid', ''),
+        score: s.currentScore,
+        monthlyLoss: s.monthlyImpact,
+      }));
+
+      setResults({
+        ...results,
+        criticalSections: sectionsToShow,
+        totalMonthlyLoss: revenueData.potentialMonthlyGain,
+        dataSource: revenueData.dataSource,
+      });
+    }
+  }, [revenueData]);
 
   // Handle analysis progress simulation
   useEffect(() => {
@@ -110,15 +157,11 @@ export function OnboardingWrapper({
   // When analysis finishes, move to score reveal
   useEffect(() => {
     if (analysisData && currentStep === 'analyzing' && !isAnalyzing) {
-      const calculatedResults = calculateResults(analysisData);
-      if (calculatedResults) {
-        setResults(calculatedResults);
-      }
       setTimeout(() => {
         setStep('score-reveal');
       }, 500);
     }
-  }, [analysisData, currentStep, isAnalyzing, setResults, setStep]);
+  }, [analysisData, currentStep, isAnalyzing, setStep]);
 
   if (!isOnboarding) return null;
 

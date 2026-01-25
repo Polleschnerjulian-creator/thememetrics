@@ -32,6 +32,7 @@ interface OnboardingState {
     }>;
     totalMonthlyLoss: number;
     percentile: number;
+    dataSource?: 'shopify' | 'estimated';
   } | null;
   completedFixes: string[];
 }

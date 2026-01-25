@@ -19,7 +19,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { LanguageToggle } from '@/components/ui/language-toggle';
 import { cn } from '@/lib/utils';
 import { useShop } from '@/hooks/useShop';
-import { OnboardingProvider } from '@/components/onboarding';
+import { OnboardingProvider, AppTour } from '@/components/onboarding';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', labelEn: 'Dashboard', icon: LayoutDashboard },
@@ -101,6 +101,9 @@ export default function DashboardLayout({
             {children}
           </div>
         </main>
+
+        {/* App Tour - shows after onboarding */}
+        <AppTour />
       </div>
     </OnboardingProvider>
   );
