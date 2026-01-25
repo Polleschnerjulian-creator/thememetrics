@@ -21,7 +21,7 @@ function ScoreInfoContent() {
         </p>
       </div>
 
-      <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 p-6">
+      <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 p-6">
         <h2 className="text-xl font-semibold text-foreground mb-3">Was unterscheidet uns von Google PageSpeed?</h2>
         <div className="grid md:grid-cols-2 gap-4">
           <div className="bg-card rounded-xl p-4">
@@ -29,7 +29,7 @@ function ScoreInfoContent() {
             <p className="text-muted-foreground text-sm">"Deine Seite hat einen Score von 45."</p>
             <p className="text-xs text-muted-foreground mt-2">→ Hilfreich, aber nicht actionable</p>
           </div>
-          <div className="bg-card rounded-xl p-4 border-2 border-indigo-200">
+          <div className="bg-card rounded-xl p-4 border-2 border-indigo-200 dark:border-indigo-800">
             <h3 className="font-medium text-foreground mb-2">🎯 ThemeMetrics sagt:</h3>
             <p className="text-muted-foreground text-sm">"Dein Hero-Video kostet dich 15 Punkte und ~€850/Monat. Hier ist der Fix."</p>
             <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-2">→ Spezifisch, messbar, umsetzbar</p>
@@ -156,6 +156,37 @@ function ScoreInfoContent() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-amber-500/10 dark:bg-amber-500/20 rounded-2xl border border-amber-500/30 p-6">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-amber-500/20 dark:bg-amber-500/30 rounded-xl flex items-center justify-center flex-shrink-0">
+            <span className="text-lg">💡</span>
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground mb-2">Warum variiert mein Score leicht?</h3>
+            <p className="text-sm text-muted-foreground mb-3">
+              Der ThemeMetrics Score kann bei aufeinanderfolgenden Analysen um wenige Punkte schwanken (±1-3 Punkte). Das ist normal und hat folgende Gründe:
+            </p>
+            <ul className="text-sm text-muted-foreground space-y-2">
+              <li className="flex items-start gap-2">
+                <span className="text-amber-600 dark:text-amber-400">•</span>
+                <span><strong>Google PageSpeed Varianz:</strong> Die Core Web Vitals werden live gemessen und variieren je nach Google-Server-Last und Netzwerkbedingungen.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-amber-600 dark:text-amber-400">•</span>
+                <span><strong>Shopify CDN:</strong> Ladezeiten können je nach CDN-Cache-Status leicht unterschiedlich sein.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-amber-600 dark:text-amber-400">•</span>
+                <span><strong>Tageszeit:</strong> Traffic-Peaks können die Messungen beeinflussen.</span>
+              </li>
+            </ul>
+            <p className="text-sm text-muted-foreground mt-3">
+              <strong>Tipp:</strong> Fokussiere dich auf den Trend über mehrere Analysen, nicht auf einzelne Schwankungen.
+            </p>
           </div>
         </div>
       </div>
