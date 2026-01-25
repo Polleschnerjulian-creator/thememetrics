@@ -353,3 +353,73 @@ export const clientAccessLog = pgTable('client_access_log', {
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
 });
+
+// ==========================================
+// EMAIL SYSTEM
+// ==========================================
+
+// Email subscriptions for users (store owners)
+export const emailSubscriptions = pgTable('email_subscriptions', {
+  id: serial('id').primaryKey(),
+  storeId: integer('store_id').references(() => stores.id),
+  email: text('email').notNull(),
+  type: text('type').notNull().default('user'), // 'lead', 'user', 'agency'
+  status: text('status').default('active'), // 'active', 'unsubscribed', 'bounced'
+  // Preferences
+  weeklyReports: boolean('weekly_reports').default(true),
+  scoreAlerts: boolean('score_alerts').default(true),
+  productUpdates: boolean('product_updates').default(true),
+  // Tracking
+  onboardingStep: integer('onboarding_step').default(0), // 0 = not started, 1-5 = steps
+  onboardingCompletedAt: timestamp('onboarding_completed_at'),
+  lastEmailSentAt: timestamp('last_email_sent_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const emailSubscriptionsRelations = relations(emailSubscriptions, ({ one, many }) => ({
+  store: one(stores, {
+    fields: [emailSubscriptions.storeId],
+    references: [stores.id],
+  }),
+  logs: many(emailLogs),
+}));
+
+// Email logs - track all sent emails
+export const emailLogs = pgTable('email_logs', {
+  id: serial('id').primaryKey(),
+  subscriptionId: integer('subscription_id').references(() => emailSubscriptions.id),
+  leadId: integer('lead_id').references(() => emailLeads.id),
+  email: text('email').notNull(),
+  template: text('template').notNull(), // 'welcome', 'weekly-report', 'score-alert', etc.
+  subject: text('subject'),
+  resendId: text('resend_id'), // ID from Resend API
+  status: text('status').default('sent'), // 'sent', 'delivered', 'opened', 'clicked', 'bounced'
+  sentAt: timestamp('sent_at').defaultNow(),
+  openedAt: timestamp('opened_at'),
+  clickedAt: timestamp('clicked_at'),
+});
+
+export const emailLogsRelations = relations(emailLogs, ({ one }) => ({
+  subscription: one(emailSubscriptions, {
+    fields: [emailLogs.subscriptionId],
+    references: [emailSubscriptions.id],
+  }),
+  lead: one(emailLeads, {
+    fields: [emailLogs.leadId],
+    references: [emailLeads.id],
+  }),
+}));
+
+// Scheduled emails for drip campaigns
+export const scheduledEmails = pgTable('scheduled_emails', {
+  id: serial('id').primaryKey(),
+  subscriptionId: integer('subscription_id').references(() => emailSubscriptions.id),
+  leadId: integer('lead_id').references(() => emailLeads.id),
+  email: text('email').notNull(),
+  template: text('template').notNull(),
+  scheduledFor: timestamp('scheduled_for').notNull(),
+  sent: boolean('sent').default(false),
+  sentAt: timestamp('sent_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
