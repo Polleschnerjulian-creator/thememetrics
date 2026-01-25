@@ -936,7 +936,7 @@ function RecommendationsContent() {
                     )
                   ) : (
                     <p className="text-sm text-muted-foreground">Für diese Empfehlung gibt es noch keinen automatischen Code-Fix. Nutze die Schritt-für-Schritt Anleitung.</p>
-                  )}}
+                  )}
 
                   <div className="border border-indigo-500/20 rounded-xl overflow-hidden">
                     <button onClick={() => toggleGuide(rec.id)} className="w-full flex items-center justify-between p-4 bg-indigo-500/5 hover:bg-indigo-500/10">
