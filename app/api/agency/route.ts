@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 
-// GET: Get agency data with workspaces
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -56,11 +56,11 @@ export async function GET(request: NextRequest) {
         });
     }
 
-    const workspaces = await db.query.workspaces.findMany({
+    const workspaces: any[] = await db.query.workspaces.findMany({
       where: eq(schema.workspaces.agencyId, agency.id),
     });
 
-    const teamMembers = await db.query.teamMembers.findMany({
+    const teamMembers: any[] = await db.query.teamMembers.findMany({
       where: eq(schema.teamMembers.agencyId, agency.id),
     });
 
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
         maxWorkspaces: agency.maxWorkspaces,
         maxTeamMembers: agency.maxTeamMembers,
       },
-      workspaces: workspaces.map((w) => ({
+      workspaces: workspaces.map((w: any) => ({
         id: w.id,
         name: w.name,
         shopDomain: w.shopDomain,
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
         notes: w.notes,
         createdAt: w.createdAt,
       })),
-      teamMembers: teamMembers.map((m) => ({
+      teamMembers: teamMembers.map((m: any) => ({
         id: m.id,
         email: m.email,
         name: m.name,
@@ -104,7 +104,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PUT: Update agency settings
 export async function PUT(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -131,7 +130,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Agency not found' }, { status: 404 });
     }
 
-    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+    const updateData: any = { updatedAt: new Date() };
     if (body.name) updateData.name = body.name;
     if (body.logoBase64) updateData.logoBase64 = body.logoBase64;
     if (body.logoUrl) updateData.logoUrl = body.logoUrl;

@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, desc } from 'drizzle-orm';
 
-// GET: Get client dashboard data via access token
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -75,29 +75,29 @@ export async function GET(request: NextRequest) {
       orderBy: desc(schema.themeAnalyses.analyzedAt),
     });
 
-    const sectionAnalyses = latestAnalysis 
+    const sectionAnalyses: any[] = latestAnalysis 
       ? await db.query.sectionAnalyses.findMany({
           where: eq(schema.sectionAnalyses.analysisId, latestAnalysis.id),
         })
       : [];
 
-    const analysisHistory = await db.query.themeAnalyses.findMany({
+    const analysisHistory: any[] = await db.query.themeAnalyses.findMany({
       where: eq(schema.themeAnalyses.storeId, store.id),
       orderBy: desc(schema.themeAnalyses.analyzedAt),
       limit: 10,
     });
 
-    const criticalSections = sectionAnalyses.filter((s) => s.performanceScore < 40).length;
-    const warningSections = sectionAnalyses.filter((s) => s.performanceScore >= 40 && s.performanceScore < 60).length;
-    const goodSections = sectionAnalyses.filter((s) => s.performanceScore >= 60).length;
+    const criticalSections = sectionAnalyses.filter((s: any) => s.performanceScore < 40).length;
+    const warningSections = sectionAnalyses.filter((s: any) => s.performanceScore >= 40 && s.performanceScore < 60).length;
+    const goodSections = sectionAnalyses.filter((s: any) => s.performanceScore >= 60).length;
 
     const topRecommendations = sectionAnalyses
-      .flatMap((s) => ((s.recommendations as string[]) || []).map((r) => ({
+      .flatMap((s: any) => ((s.recommendations || []) as string[]).map((r: string) => ({
         section: s.sectionName,
         recommendation: r,
         score: s.performanceScore,
       })))
-      .filter((r) => r.score < 60)
+      .filter((r: any) => r.score < 60)
       .slice(0, 10);
 
     return NextResponse.json({
@@ -130,15 +130,15 @@ export async function GET(request: NextRequest) {
           good: goodSections,
           total: sectionAnalyses.length,
         },
-        sections: sectionAnalyses.map((s) => ({
+        sections: sectionAnalyses.map((s: any) => ({
           name: s.sectionName,
           type: s.sectionType,
           category: s.category,
           score: s.performanceScore,
-          recommendationsCount: ((s.recommendations as string[]) || []).length,
+          recommendationsCount: ((s.recommendations || []) as string[]).length,
         })),
         recommendations: topRecommendations,
-        history: analysisHistory.map((a) => ({
+        history: analysisHistory.map((a: any) => ({
           score: a.overallScore,
           date: a.analyzedAt,
           themeName: a.themeName,

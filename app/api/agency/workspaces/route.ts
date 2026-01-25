@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,7 +10,6 @@ function generateToken(): string {
   return randomBytes(32).toString('hex');
 }
 
-// POST: Create new workspace
 export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Agency not found' }, { status: 404 });
     }
 
-    const existingWorkspaces = await db.query.workspaces.findMany({
+    const existingWorkspaces: any[] = await db.query.workspaces.findMany({
       where: eq(schema.workspaces.agencyId, agency.id),
     });
 
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       }, { status: 403 });
     }
 
-    const existingShop = existingWorkspaces.find((w) => w.shopDomain === body.shopDomain);
+    const existingShop = existingWorkspaces.find((w: any) => w.shopDomain === body.shopDomain);
     if (existingShop) {
       return NextResponse.json({ 
         error: 'Shop already exists in a workspace',
@@ -92,7 +92,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT: Update workspace
 export async function PUT(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -131,7 +130,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
-    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+    const updateData: any = { updatedAt: new Date() };
     if (body.name !== undefined) updateData.name = body.name;
     if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
@@ -165,7 +164,6 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE: Remove workspace
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
