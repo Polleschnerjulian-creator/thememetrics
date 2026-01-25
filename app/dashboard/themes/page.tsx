@@ -3,6 +3,7 @@
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { ThemesSkeleton } from '@/components/ui/skeleton';
 import { 
   ArrowLeft, 
   Layers, 
@@ -142,14 +143,7 @@ function ThemeAnalysisContent() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Lade Theme-Analyse...</p>
-        </div>
-      </div>
-    );
+    return <ThemesSkeleton />;
   }
 
   if (!data) {

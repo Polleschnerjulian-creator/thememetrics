@@ -1,6 +1,7 @@
 'use client';
 
 import { ScoreCircle } from '@/components/ui/score-circle';
+import { DashboardSkeleton } from '@/components/ui/skeleton';
 import { TrendChart, TrendBadge } from '@/components/dashboard/TrendChart';
 import { OnboardingModal, OnboardingChecklist } from '@/components/dashboard/Onboarding';
 import { QuickWins } from '@/components/dashboard/ActionableRecs';
@@ -294,9 +295,14 @@ function DashboardContent() {
         body: JSON.stringify({ shop }),
       });
 
-      if (!response.ok) throw new Error('Analysis failed');
-
       const data = await response.json();
+      
+      if (!response.ok) {
+        // Show specific error message from API
+        const errorMsg = data.message || data.error || 'Analysis failed';
+        throw new Error(errorMsg);
+      }
+
       setAnalysis(data);
       setCompletedSteps(prev => [...prev.filter(s => s !== 'analyze'), 'analyze']);
 
@@ -305,9 +311,11 @@ function DashboardContent() {
       if (historyRes.ok) {
         setHistoryData(await historyRes.json());
       }
-    } catch (err) {
-      setError('Analyse fehlgeschlagen. Bitte versuche es erneut.');
-      console.error(err);
+    } catch (err: any) {
+      const errorMessage = err.message || 'Analyse fehlgeschlagen. Bitte versuche es erneut.';
+      setError(errorMessage);
+      console.error('Analysis error:', err);
+      console.error('Error details:', { message: err.message, stack: err.stack });
     } finally {
       setIsAnalyzing(false);
     }
@@ -368,14 +376,7 @@ function DashboardContent() {
   );
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-muted flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Lade Dashboard...</p>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (

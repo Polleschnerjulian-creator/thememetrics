@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { AccessibilitySkeleton } from '@/components/ui/skeleton';
 import { 
   ArrowLeft, 
   Eye, 
@@ -574,14 +575,7 @@ function AccessibilityContent() {
   };
 
   if (loading && !report) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <RefreshCw className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Lade Accessibility-Daten...</p>
-        </div>
-      </div>
-    );
+    return <AccessibilitySkeleton />;
   }
 
   return (

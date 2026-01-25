@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { ImagesSkeleton } from '@/components/ui/skeleton';
 import { 
   ArrowLeft, 
   Image as ImageIcon,
@@ -324,14 +325,7 @@ function ImageContent() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Lade Bildanalyse...</p>
-        </div>
-      </div>
-    );
+    return <ImagesSkeleton />;
   }
 
   // Filter and sort issues

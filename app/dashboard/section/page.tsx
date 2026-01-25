@@ -3,6 +3,7 @@
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { SectionSkeleton } from '@/components/ui/skeleton';
 import { 
   ArrowLeft, 
   Code, 
@@ -266,11 +267,7 @@ function SectionDetailContent() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-      </div>
-    );
+    return <SectionSkeleton />;
   }
 
   if (!section) {
