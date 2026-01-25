@@ -39,6 +39,7 @@ export function PDFReportButton({ shop }: PDFReportButtonProps) {
   
   const { canUsePdfReport, features } = usePlan();
   const pdfAllowed = canUsePdfReport().allowed;
+  const isWhiteLabel = features.pdfWhiteLabel; // Pro+ gets white label
 
   const generatePDF = async () => {
     // Check plan permission
@@ -100,10 +101,19 @@ export function PDFReportButton({ shop }: PDFReportButtonProps) {
         doc.rect(0, pageHeight - 20, pageWidth, 20, 'F');
         doc.setFontSize(8);
         doc.setTextColor(...colors.textLight);
-        doc.setFont('helvetica', 'bold');
-        doc.text('ThemeMetrics', margin, pageHeight - 8);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Confidential Report', pageWidth / 2, pageHeight - 8, { align: 'center' });
+        
+        if (!isWhiteLabel) {
+          // Show ThemeMetrics branding for Free/Starter
+          doc.setFont('helvetica', 'bold');
+          doc.text('ThemeMetrics', margin, pageHeight - 8);
+          doc.setFont('helvetica', 'normal');
+          doc.text('Confidential Report', pageWidth / 2, pageHeight - 8, { align: 'center' });
+        } else {
+          // White-label for Pro+: just show store name
+          doc.setFont('helvetica', 'normal');
+          doc.text(`${storeName} - Confidential`, margin, pageHeight - 8);
+        }
+        
         doc.text(`Seite ${pageNum} von ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
       };
 
@@ -115,24 +125,34 @@ export function PDFReportButton({ shop }: PDFReportButtonProps) {
       doc.setFillColor(...colors.primary);
       doc.rect(0, 0, pageWidth, 55, 'F');
       
-      // Logo area
-      doc.setFillColor(255, 255, 255);
-      doc.circle(margin + 8, 20, 8, 'F');
-      doc.setFillColor(...colors.primary);
-      doc.circle(margin + 8, 20, 5, 'F');
-      doc.setFillColor(255, 255, 255);
-      doc.circle(margin + 8, 20, 2, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text('ThemeMetrics', margin + 22, 23);
+      if (!isWhiteLabel) {
+        // ThemeMetrics branding for Free/Starter
+        // Logo area
+        doc.setFillColor(255, 255, 255);
+        doc.circle(margin + 8, 20, 8, 'F');
+        doc.setFillColor(...colors.primary);
+        doc.circle(margin + 8, 20, 5, 'F');
+        doc.setFillColor(255, 255, 255);
+        doc.circle(margin + 8, 20, 2, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('ThemeMetrics', margin + 22, 23);
+      } else {
+        // White-label for Pro+: show store name as title
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Performance Report', margin, 23);
+      }
       
       // Report type badge
       doc.setFillColor(255, 255, 255, 0.2);
       doc.roundedRect(pageWidth - margin - 45, 13, 45, 14, 3, 3, 'F');
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
+      doc.setTextColor(255, 255, 255);
       doc.text('Performance Report', pageWidth - margin - 40, 22);
       
       // Store info below header
@@ -499,7 +519,9 @@ export function PDFReportButton({ shop }: PDFReportButtonProps) {
       }
 
       // Save PDF
-      const filename = `ThemeMetrics-Report-${storeName}-${new Date().toISOString().split('T')[0]}.pdf`;
+      const filename = isWhiteLabel 
+        ? `Performance-Report-${storeName}-${new Date().toISOString().split('T')[0]}.pdf`
+        : `ThemeMetrics-Report-${storeName}-${new Date().toISOString().split('T')[0]}.pdf`;
       doc.save(filename);
 
     } catch (err) {
