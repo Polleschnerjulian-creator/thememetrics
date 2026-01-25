@@ -5,6 +5,9 @@ import { cookies } from 'next/headers';
 import { exchangeCodeForToken, isValidShopDomain } from '@/lib/shopify';
 import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
+import { createEmailSubscription } from '@/lib/email';
+import { sendEmail } from '@/lib/email/resend';
+import { welcomeEmail } from '@/lib/email/templates';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -42,6 +45,7 @@ export async function GET(request: NextRequest) {
     });
     
     let storeId: number;
+    let isNewInstall = false;
 
     if (existingStore) {
       await db.update(schema.stores).set({
@@ -58,12 +62,50 @@ export async function GET(request: NextRequest) {
         installedAt: new Date(),
       }).returning();
       storeId = newStore.id;
+      isNewInstall = true;
 
       await db.insert(schema.subscriptions).values({
         storeId,
         plan: 'starter',
         status: 'active',
       });
+    }
+
+    // Send welcome email for new installs
+    if (isNewInstall) {
+      try {
+        // Fetch shop email from Shopify
+        const shopDataResponse = await fetch(`https://${shop}/admin/api/2024-01/shop.json`, {
+          headers: {
+            'X-Shopify-Access-Token': accessToken,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (shopDataResponse.ok) {
+          const shopData = await shopDataResponse.json();
+          const shopEmail = shopData.shop?.email;
+          const shopName = shopData.shop?.name || shop.replace('.myshopify.com', '');
+          
+          if (shopEmail) {
+            // Create email subscription
+            await createEmailSubscription(shopEmail, storeId, 'user');
+            
+            // Send welcome email
+            const dashboardUrl = `${appUrl}/dashboard?shop=${shop}`;
+            const html = welcomeEmail({ storeName: shopName, dashboardUrl });
+            
+            await sendEmail({
+              to: shopEmail,
+              subject: `Willkommen bei ThemeMetrics, ${shopName}! 🎉`,
+              html,
+            });
+          }
+        }
+      } catch (emailError) {
+        // Don't fail the whole auth if email fails
+        console.error('Failed to send welcome email:', emailError);
+      }
     }
     
     cookieStore.delete('shopify_oauth_state');
@@ -76,7 +118,7 @@ export async function GET(request: NextRequest) {
       path: '/',
     });
     
-    return NextResponse.redirect(`${appUrl}/dashboard?installed=true`);
+    return NextResponse.redirect(`${appUrl}/dashboard?shop=${shop}&installed=${isNewInstall}`);
   } catch (error) {
     console.error('OAuth callback error:', error);
     return NextResponse.redirect(`${appUrl}/?error=auth_failed`);
