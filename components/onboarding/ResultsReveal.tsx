@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowRight, TrendingUp, AlertTriangle, DollarSign, Sparkles } from 'lucide-react';
 import { useOnboarding } from './OnboardingProvider';
 
@@ -8,19 +8,12 @@ export function ResultsReveal() {
   const { currentStep, setStep, results } = useOnboarding();
   const [animatedScore, setAnimatedScore] = useState(0);
   const [showContent, setShowContent] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
+  const hasAnimated = useRef(false);
 
+  // Animate score counting up - only once
   useEffect(() => {
-    if (currentStep === 'score-reveal' || currentStep === 'problems-reveal' || currentStep === 'money-impact') {
-      setIsVisible(true);
-    } else {
-      setIsVisible(false);
-    }
-  }, [currentStep]);
-
-  // Animate score counting up
-  useEffect(() => {
-    if (currentStep === 'score-reveal' && results) {
+    if (currentStep === 'score-reveal' && results && !hasAnimated.current) {
+      hasAnimated.current = true;
       setShowContent(false);
       const target = results.score;
       const duration = 1500;
@@ -43,7 +36,12 @@ export function ResultsReveal() {
     }
   }, [currentStep, results]);
 
-  if (!isVisible || !results) return null;
+  if (!results) return null;
+  
+  // Only show for these specific steps
+  if (currentStep !== 'score-reveal' && currentStep !== 'problems-reveal' && currentStep !== 'money-impact') {
+    return null;
+  }
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-emerald-500';
