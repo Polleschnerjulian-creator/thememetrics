@@ -25,6 +25,48 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 });
     }
 
+    // Get subscription to check plan
+    const subscription = await db.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.storeId, store.id),
+    });
+
+    // Get agency branding if user is agency or part of an agency workspace
+    let agencyBranding = null;
+    
+    // Check if this store is an agency owner
+    const agency = await db.query.agencies.findFirst({
+      where: eq(schema.agencies.ownerStoreId, store.id),
+    });
+
+    if (agency) {
+      agencyBranding = {
+        name: agency.name,
+        logoBase64: agency.logoBase64,
+        logoUrl: agency.logoUrl,
+        primaryColor: agency.primaryColor,
+      };
+    } else {
+      // Check if this store is part of an agency workspace
+      const workspace = await db.query.workspaces.findFirst({
+        where: eq(schema.workspaces.storeId, store.id),
+      });
+
+      if (workspace) {
+        const workspaceAgency = await db.query.agencies.findFirst({
+          where: eq(schema.agencies.id, workspace.agencyId),
+        });
+
+        if (workspaceAgency) {
+          agencyBranding = {
+            name: workspaceAgency.name,
+            logoBase64: workspaceAgency.logoBase64,
+            logoUrl: workspaceAgency.logoUrl,
+            primaryColor: workspaceAgency.primaryColor,
+          };
+        }
+      }
+    }
+
     // Get latest analysis
     const latestAnalysis = await db.query.themeAnalyses.findFirst({
       where: eq(schema.themeAnalyses.storeId, store.id),
@@ -51,8 +93,9 @@ export async function GET(request: NextRequest) {
     const reportData = {
       store: {
         domain: shopSession,
-        plan: store.plan || 'starter',
+        plan: subscription?.plan || store.plan || 'free',
       },
+      agency: agencyBranding,
       analysis: {
         themeName: latestAnalysis.themeName,
         overallScore: latestAnalysis.overallScore,

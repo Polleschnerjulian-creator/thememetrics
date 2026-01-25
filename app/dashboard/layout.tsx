@@ -12,7 +12,8 @@ import {
   Gauge,
   CreditCard,
   Accessibility,
-  Image
+  Image,
+  Building2
 } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -29,6 +30,7 @@ const navItems = [
   { href: '/dashboard/accessibility', label: 'Accessibility', labelEn: 'Accessibility', icon: Accessibility },
   { href: '/dashboard/images', label: 'Bildoptimierung', labelEn: 'Image Optimization', icon: Image },
   { href: '/dashboard/recommendations', label: 'Empfehlungen', labelEn: 'Recommendations', icon: Lightbulb },
+  { href: '/dashboard/agency', label: 'Agency', labelEn: 'Agency', icon: Building2 },
   { href: '/dashboard/pricing', label: 'Pricing', labelEn: 'Pricing', icon: CreditCard },
   { href: '/dashboard/settings', label: 'Einstellungen', labelEn: 'Settings', icon: Settings },
 ];

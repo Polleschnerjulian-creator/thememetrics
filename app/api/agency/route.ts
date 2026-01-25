@@ -1,0 +1,166 @@
+export const dynamic = 'force-dynamic';
+
+import { NextRequest, NextResponse } from 'next/server';
+import { db, schema } from '@/lib/db';
+import { eq, and } from 'drizzle-orm';
+import { PLANS } from '@/lib/billing';
+
+// GET: Get agency data with workspaces
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const shop = searchParams.get('shop');
+
+    if (!shop) {
+      return NextResponse.json({ error: 'Shop parameter required' }, { status: 400 });
+    }
+
+    // Get store and verify agency plan
+    const store = await db.query.stores.findFirst({
+      where: eq(schema.stores.shopDomain, shop),
+    });
+
+    if (!store) {
+      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+    }
+
+    const subscription = await db.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.storeId, store.id),
+    });
+
+    if (subscription?.plan !== 'agency') {
+      return NextResponse.json({ 
+        error: 'Agency plan required',
+        currentPlan: subscription?.plan || 'free'
+      }, { status: 403 });
+    }
+
+    // Get or create agency for this store
+    let agency = await db.query.agencies.findFirst({
+      where: eq(schema.agencies.ownerStoreId, store.id),
+    });
+
+    if (!agency) {
+      // Auto-create agency for agency plan subscribers
+      const [newAgency] = await db.insert(schema.agencies)
+        .values({
+          name: shop.replace('.myshopify.com', ''),
+          ownerEmail: '', // Will be set later
+          ownerStoreId: store.id,
+        })
+        .returning();
+      agency = newAgency;
+
+      // Create default workspace for the owner's store
+      await db.insert(schema.workspaces)
+        .values({
+          agencyId: agency.id,
+          name: 'Mein Shop',
+          shopDomain: shop,
+          storeId: store.id,
+        });
+    }
+
+    // Get workspaces
+    const workspaces = await db.query.workspaces.findMany({
+      where: eq(schema.workspaces.agencyId, agency.id),
+    });
+
+    // Get team members
+    const teamMembers = await db.query.teamMembers.findMany({
+      where: eq(schema.teamMembers.agencyId, agency.id),
+    });
+
+    return NextResponse.json({
+      agency: {
+        id: agency.id,
+        name: agency.name,
+        logoUrl: agency.logoUrl,
+        primaryColor: agency.primaryColor,
+        maxWorkspaces: agency.maxWorkspaces,
+        maxTeamMembers: agency.maxTeamMembers,
+      },
+      workspaces: workspaces.map(w => ({
+        id: w.id,
+        name: w.name,
+        shopDomain: w.shopDomain,
+        clientAccessEnabled: w.clientAccessEnabled,
+        clientAccessToken: w.clientAccessToken,
+        isActive: w.isActive,
+        notes: w.notes,
+        createdAt: w.createdAt,
+      })),
+      teamMembers: teamMembers.map(m => ({
+        id: m.id,
+        email: m.email,
+        name: m.name,
+        role: m.role,
+        inviteStatus: m.inviteStatus,
+        lastActiveAt: m.lastActiveAt,
+      })),
+      limits: {
+        workspacesUsed: workspaces.length,
+        workspacesMax: agency.maxWorkspaces,
+        teamMembersUsed: teamMembers.length,
+        teamMembersMax: agency.maxTeamMembers,
+      },
+    });
+  } catch (error) {
+    console.error('Agency API error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// PUT: Update agency settings (name, logo, colors)
+export async function PUT(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const shop = searchParams.get('shop');
+    const body = await request.json();
+
+    if (!shop) {
+      return NextResponse.json({ error: 'Shop parameter required' }, { status: 400 });
+    }
+
+    const store = await db.query.stores.findFirst({
+      where: eq(schema.stores.shopDomain, shop),
+    });
+
+    if (!store) {
+      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+    }
+
+    const agency = await db.query.agencies.findFirst({
+      where: eq(schema.agencies.ownerStoreId, store.id),
+    });
+
+    if (!agency) {
+      return NextResponse.json({ error: 'Agency not found' }, { status: 404 });
+    }
+
+    // Update agency
+    const updateData: any = { updatedAt: new Date() };
+    if (body.name) updateData.name = body.name;
+    if (body.logoBase64) updateData.logoBase64 = body.logoBase64;
+    if (body.logoUrl) updateData.logoUrl = body.logoUrl;
+    if (body.primaryColor) updateData.primaryColor = body.primaryColor;
+
+    const [updated] = await db.update(schema.agencies)
+      .set(updateData)
+      .where(eq(schema.agencies.id, agency.id))
+      .returning();
+
+    return NextResponse.json({ 
+      success: true, 
+      agency: {
+        id: updated.id,
+        name: updated.name,
+        logoUrl: updated.logoUrl,
+        primaryColor: updated.primaryColor,
+      }
+    });
+  } catch (error) {
+    console.error('Agency update error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

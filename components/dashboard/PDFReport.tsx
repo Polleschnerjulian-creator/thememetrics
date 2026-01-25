@@ -25,6 +25,12 @@ interface ReportData {
     good: number;
     totalRecommendations: number;
   };
+  agency?: {
+    name: string;
+    logoBase64?: string | null;
+    logoUrl?: string | null;
+    primaryColor?: string;
+  } | null;
   generatedAt: string;
 }
 
@@ -78,6 +84,14 @@ export function PDFReportButton({ shop }: PDFReportButtonProps) {
         white: [255, 255, 255] as [number, number, number],
       };
 
+      // Helper to convert hex color to RGB
+      const hexToRgb = (hex: string): [number, number, number] => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result 
+          ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+          : colors.primary;
+      };
+
       const getScoreColor = (score: number): [number, number, number] => {
         if (score >= 70) return colors.success;
         if (score >= 50) return colors.warning;
@@ -108,6 +122,12 @@ export function PDFReportButton({ shop }: PDFReportButtonProps) {
           doc.text('ThemeMetrics', margin, pageHeight - 8);
           doc.setFont('helvetica', 'normal');
           doc.text('Confidential Report', pageWidth / 2, pageHeight - 8, { align: 'center' });
+        } else if (data.agency?.name) {
+          // Agency branding for Agency plan
+          doc.setFont('helvetica', 'bold');
+          doc.text(data.agency.name, margin, pageHeight - 8);
+          doc.setFont('helvetica', 'normal');
+          doc.text('Confidential Report', pageWidth / 2, pageHeight - 8, { align: 'center' });
         } else {
           // White-label for Pro+: just show store name
           doc.setFont('helvetica', 'normal');
@@ -121,8 +141,14 @@ export function PDFReportButton({ shop }: PDFReportButtonProps) {
       // PAGE 1: Executive Summary
       // ==========================================
       
+      // Get agency branding if available
+      const agencyBranding = data.agency;
+      const headerColor = agencyBranding?.primaryColor 
+        ? hexToRgb(agencyBranding.primaryColor) 
+        : colors.primary;
+      
       // Header with gradient effect (solid color in PDF)
-      doc.setFillColor(...colors.primary);
+      doc.setFillColor(...headerColor);
       doc.rect(0, 0, pageWidth, 55, 'F');
       
       if (!isWhiteLabel) {
@@ -130,7 +156,7 @@ export function PDFReportButton({ shop }: PDFReportButtonProps) {
         // Logo area
         doc.setFillColor(255, 255, 255);
         doc.circle(margin + 8, 20, 8, 'F');
-        doc.setFillColor(...colors.primary);
+        doc.setFillColor(...headerColor);
         doc.circle(margin + 8, 20, 5, 'F');
         doc.setFillColor(255, 255, 255);
         doc.circle(margin + 8, 20, 2, 'F');
@@ -139,12 +165,30 @@ export function PDFReportButton({ shop }: PDFReportButtonProps) {
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
         doc.text('ThemeMetrics', margin + 22, 23);
+      } else if (agencyBranding?.logoBase64) {
+        // Agency custom logo for Agency plan
+        try {
+          const logoData = agencyBranding.logoBase64;
+          // Add logo image (PNG/JPG)
+          doc.addImage(logoData, 'PNG', margin, 10, 30, 30);
+          
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(14);
+          doc.setFont('helvetica', 'bold');
+          doc.text(agencyBranding.name || 'Performance Report', margin + 35, 23);
+        } catch (e) {
+          // Fallback if logo fails
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(18);
+          doc.setFont('helvetica', 'bold');
+          doc.text(agencyBranding.name || 'Performance Report', margin, 23);
+        }
       } else {
-        // White-label for Pro+: show store name as title
+        // White-label for Pro+ without custom logo
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
-        doc.text('Performance Report', margin, 23);
+        doc.text(agencyBranding?.name || 'Performance Report', margin, 23);
       }
       
       // Report type badge

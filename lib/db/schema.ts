@@ -239,3 +239,117 @@ export const emailLeads = pgTable('email_leads', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+// ==========================================
+// AGENCY FEATURES
+// ==========================================
+
+// Agencies table - the parent account for agency plan users
+export const agencies = pgTable('agencies', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  ownerEmail: text('owner_email').notNull(),
+  ownerStoreId: integer('owner_store_id').references(() => stores.id), // The store that has the agency subscription
+  // Branding settings
+  logoUrl: text('logo_url'), // Base64 or URL to custom logo
+  logoBase64: text('logo_base64'), // For PDF embedding
+  primaryColor: text('primary_color').default('#6366f1'), // Custom brand color
+  // Settings
+  maxWorkspaces: integer('max_workspaces').default(10),
+  maxTeamMembers: integer('max_team_members').default(5),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const agenciesRelations = relations(agencies, ({ one, many }) => ({
+  ownerStore: one(stores, {
+    fields: [agencies.ownerStoreId],
+    references: [stores.id],
+  }),
+  workspaces: many(workspaces),
+  teamMembers: many(teamMembers),
+}));
+
+// Workspaces - each workspace represents a client/shop
+export const workspaces = pgTable('workspaces', {
+  id: serial('id').primaryKey(),
+  agencyId: integer('agency_id').references(() => agencies.id).notNull(),
+  name: text('name').notNull(), // e.g. "Kunde A - Fashion Store"
+  shopDomain: text('shop_domain').notNull(), // The connected Shopify store
+  storeId: integer('store_id').references(() => stores.id), // Link to stores table
+  // Client Dashboard Access
+  clientAccessToken: text('client_access_token'), // Unique token for client access
+  clientAccessEnabled: boolean('client_access_enabled').default(false),
+  clientAccessPassword: text('client_access_password'), // Optional password protection
+  // Settings
+  notes: text('notes'), // Internal notes about the client
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
+  agency: one(agencies, {
+    fields: [workspaces.agencyId],
+    references: [agencies.id],
+  }),
+  store: one(stores, {
+    fields: [workspaces.storeId],
+    references: [stores.id],
+  }),
+  memberAccess: many(workspaceMemberAccess),
+}));
+
+// Team Members - users who can access the agency account
+export const teamMembers = pgTable('team_members', {
+  id: serial('id').primaryKey(),
+  agencyId: integer('agency_id').references(() => agencies.id).notNull(),
+  email: text('email').notNull(),
+  name: text('name'),
+  role: text('role').notNull().default('member'), // 'owner', 'admin', 'member'
+  // Invite flow
+  inviteToken: text('invite_token'),
+  inviteStatus: text('invite_status').default('pending'), // 'pending', 'accepted', 'expired'
+  invitedAt: timestamp('invited_at').defaultNow(),
+  acceptedAt: timestamp('accepted_at'),
+  // Activity
+  lastActiveAt: timestamp('last_active_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const teamMembersRelations = relations(teamMembers, ({ one, many }) => ({
+  agency: one(agencies, {
+    fields: [teamMembers.agencyId],
+    references: [agencies.id],
+  }),
+  workspaceAccess: many(workspaceMemberAccess),
+}));
+
+// Workspace Member Access - which team members can access which workspaces
+export const workspaceMemberAccess = pgTable('workspace_member_access', {
+  id: serial('id').primaryKey(),
+  workspaceId: integer('workspace_id').references(() => workspaces.id).notNull(),
+  teamMemberId: integer('team_member_id').references(() => teamMembers.id).notNull(),
+  accessLevel: text('access_level').default('view'), // 'view', 'edit', 'admin'
+  grantedAt: timestamp('granted_at').defaultNow(),
+});
+
+export const workspaceMemberAccessRelations = relations(workspaceMemberAccess, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [workspaceMemberAccess.workspaceId],
+    references: [workspaces.id],
+  }),
+  teamMember: one(teamMembers, {
+    fields: [workspaceMemberAccess.teamMemberId],
+    references: [teamMembers.id],
+  }),
+}));
+
+// Client Dashboard Access Log - track when clients view their dashboard
+export const clientAccessLog = pgTable('client_access_log', {
+  id: serial('id').primaryKey(),
+  workspaceId: integer('workspace_id').references(() => workspaces.id).notNull(),
+  accessedAt: timestamp('accessed_at').defaultNow(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+});
