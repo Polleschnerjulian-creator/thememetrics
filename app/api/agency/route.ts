@@ -4,26 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 
-interface Workspace {
-  id: number;
-  name: string;
-  shopDomain: string;
-  clientAccessEnabled: boolean | null;
-  clientAccessToken: string | null;
-  isActive: boolean | null;
-  notes: string | null;
-  createdAt: Date | null;
-}
-
-interface TeamMember {
-  id: number;
-  email: string;
-  name: string | null;
-  role: string;
-  inviteStatus: string | null;
-  lastActiveAt: Date | null;
-}
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -75,11 +55,11 @@ export async function GET(request: NextRequest) {
         });
     }
 
-    const workspaces: Workspace[] = await db.query.workspaces.findMany({
+    const workspaces = await db.query.workspaces.findMany({
       where: eq(schema.workspaces.agencyId, agency.id),
     });
 
-    const teamMembers: TeamMember[] = await db.query.teamMembers.findMany({
+    const teamMembers = await db.query.teamMembers.findMany({
       where: eq(schema.teamMembers.agencyId, agency.id),
     });
 
@@ -92,7 +72,7 @@ export async function GET(request: NextRequest) {
         maxWorkspaces: agency.maxWorkspaces,
         maxTeamMembers: agency.maxTeamMembers,
       },
-      workspaces: workspaces.map((w: Workspace) => ({
+      workspaces: workspaces.map(w => ({
         id: w.id,
         name: w.name,
         shopDomain: w.shopDomain,
@@ -102,7 +82,7 @@ export async function GET(request: NextRequest) {
         notes: w.notes,
         createdAt: w.createdAt,
       })),
-      teamMembers: teamMembers.map((m: TeamMember) => ({
+      teamMembers: teamMembers.map(m => ({
         id: m.id,
         email: m.email,
         name: m.name,

@@ -5,18 +5,6 @@ import { db, schema } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 
-interface Workspace {
-  id: number;
-  name: string;
-  shopDomain: string;
-  storeId: number | null;
-  clientAccessEnabled: boolean | null;
-  clientAccessToken: string | null;
-  isActive: boolean | null;
-  notes: string | null;
-  createdAt: Date | null;
-}
-
 function generateToken(): string {
   return randomBytes(32).toString('hex');
 }
@@ -51,7 +39,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Agency not found' }, { status: 404 });
     }
 
-    const existingWorkspaces: Workspace[] = await db.query.workspaces.findMany({
+    const existingWorkspaces = await db.query.workspaces.findMany({
       where: eq(schema.workspaces.agencyId, agency.id),
     });
 
@@ -63,7 +51,7 @@ export async function POST(request: NextRequest) {
       }, { status: 403 });
     }
 
-    const existingShop = existingWorkspaces.find((w: Workspace) => w.shopDomain === body.shopDomain);
+    const existingShop = existingWorkspaces.find(w => w.shopDomain === body.shopDomain);
     if (existingShop) {
       return NextResponse.json({ 
         error: 'Shop already exists in a workspace',
