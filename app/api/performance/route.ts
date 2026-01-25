@@ -1,6 +1,9 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { db, schema } from '@/lib/db';
+import { eq, and } from 'drizzle-orm';
+import { PLANS, PlanId, canPerformAction } from '@/lib/billing';
 
 interface PageSpeedResponse {
   lighthouseResult: {
@@ -30,9 +33,61 @@ interface PageSpeedResponse {
   };
 }
 
+// Get current month in format '2026-01'
+function getCurrentMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Check plan limits and update usage
+async function checkAndUpdateUsage(storeId: number, planId: PlanId, isDesktop: boolean): Promise<{ allowed: boolean; error?: string }> {
+  const currentMonth = getCurrentMonth();
+  const features = PLANS[planId].features;
+  
+  // Check desktop permission
+  if (isDesktop && !features.desktopPerformance) {
+    return { allowed: false, error: 'Desktop Performance ist ab dem Starter Plan verfügbar.' };
+  }
+  
+  let usage = await db.query.usageTracking.findFirst({
+    where: and(
+      eq(schema.usageTracking.storeId, storeId),
+      eq(schema.usageTracking.month, currentMonth)
+    ),
+  });
+
+  if (!usage) {
+    const [newUsage] = await db.insert(schema.usageTracking)
+      .values({
+        storeId,
+        month: currentMonth,
+        themeAnalysesCount: 0,
+        performanceTestsCount: 0,
+        pdfReportsCount: 0,
+      })
+      .returning();
+    usage = newUsage;
+  }
+
+  const check = canPerformAction(planId, 'performanceTest', usage.performanceTestsCount || 0);
+  
+  if (!check.allowed) {
+    return { allowed: false, error: check.reason || 'Limit erreicht' };
+  }
+
+  await db.update(schema.usageTracking)
+    .set({ 
+      performanceTestsCount: (usage.performanceTestsCount || 0) + 1,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.usageTracking.id, usage.id));
+
+  return { allowed: true };
+}
+
 export async function POST(request: NextRequest) {
   try {
-    let { url, strategy = 'mobile' } = await request.json();
+    let { url, strategy = 'mobile', shop } = await request.json();
     
     if (!url) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
@@ -47,6 +102,30 @@ export async function POST(request: NextRequest) {
     // Validate strategy
     if (strategy !== 'mobile' && strategy !== 'desktop') {
       strategy = 'mobile';
+    }
+
+    // Check plan limits if shop is provided
+    if (shop) {
+      const store = await db.query.stores.findFirst({
+        where: eq(schema.stores.shopDomain, shop),
+      });
+
+      if (store) {
+        const subscription = await db.query.subscriptions.findFirst({
+          where: eq(schema.subscriptions.storeId, store.id),
+        });
+
+        const planId = (subscription?.plan || 'free') as PlanId;
+        const usageCheck = await checkAndUpdateUsage(store.id, planId, strategy === 'desktop');
+
+        if (!usageCheck.allowed) {
+          return NextResponse.json({ 
+            error: 'Plan limit reached',
+            message: usageCheck.error,
+            upgradeRequired: true,
+          }, { status: 403 });
+        }
+      }
     }
 
     const apiKey = process.env.PAGESPEED_API_KEY;
