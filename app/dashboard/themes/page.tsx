@@ -24,8 +24,12 @@ import {
   FileCode,
   Eye,
   Video,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Lock,
+  Crown
 } from 'lucide-react';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeModal } from '@/components/UpgradeModal';
 
 interface Section {
   name: string;
@@ -75,6 +79,10 @@ function ThemeAnalysisContent() {
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [filterScore, setFilterScore] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'category' | 'score' | 'all'>('category');
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  
+  const { canUseSectionDetails, features, plan } = usePlan();
+  const sectionDetailsAllowed = canUseSectionDetails().allowed;
 
   useEffect(() => {
     const shopFromParams = searchParams.get('shop');
@@ -101,6 +109,12 @@ function ThemeAnalysisContent() {
   }, [shop]);
 
   const toggleSection = (name: string) => {
+    // Check if section details are allowed
+    if (!sectionDetailsAllowed) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    
     const newExpanded = new Set(expandedSections);
     if (newExpanded.has(name)) {
       newExpanded.delete(name);
@@ -423,6 +437,7 @@ function ThemeAnalysisContent() {
                   isExpanded={expandedSections.has(section.name)}
                   onToggle={() => toggleSection(section.name)}
                   shop={shop}
+                  locked={!sectionDetailsAllowed}
                 />
               ))}
             </div>
@@ -435,6 +450,7 @@ function ThemeAnalysisContent() {
               isExpanded={expandedSections.has(section.name)}
               onToggle={() => toggleSection(section.name)}
               shop={shop}
+              locked={!sectionDetailsAllowed}
             />
           ))
         )}
@@ -471,6 +487,16 @@ function ThemeAnalysisContent() {
           Zuletzt analysiert: {new Date(data.theme.analyzedAt).toLocaleString('de-DE')}
         </p>
       )}
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        feature="Section-Details"
+        reason="Detaillierte Section-Analysen mit Empfehlungen sind ab dem Starter Plan verfügbar."
+        recommendedPlan="starter"
+        shop={shop}
+      />
     </div>
   );
 }
@@ -480,12 +506,14 @@ function SectionCard({
   section,
   isExpanded,
   onToggle,
-  shop
+  shop,
+  locked = false
 }: {
   section: Section;
   isExpanded: boolean;
   onToggle: () => void;
   shop: string;
+  locked?: boolean;
 }) {
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-emerald-500';
@@ -556,10 +584,19 @@ function SectionCard({
 
             <button
               onClick={onToggle}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-secondary/80 text-foreground rounded-lg text-sm font-medium transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-secondary/80 text-foreground rounded-lg text-sm font-medium transition-colors relative group"
             >
               {isExpanded ? 'Weniger' : 'Details'}
-              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              {locked ? (
+                <>
+                  <Lock className="w-4 h-4 text-amber-500" />
+                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    Ab Starter Plan
+                  </span>
+                </>
+              ) : (
+                isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />
+              )}
             </button>
           </div>
         </div>

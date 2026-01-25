@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { FileDown, Loader2 } from 'lucide-react';
+import { FileDown, Loader2, Lock, Crown } from 'lucide-react';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeModal } from '@/components/UpgradeModal';
 
 interface ReportData {
   store: { domain: string; plan: string };
@@ -33,8 +35,18 @@ interface PDFReportButtonProps {
 export function PDFReportButton({ shop }: PDFReportButtonProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  
+  const { canUsePdfReport, features } = usePlan();
+  const pdfAllowed = canUsePdfReport().allowed;
 
   const generatePDF = async () => {
+    // Check plan permission
+    if (!pdfAllowed) {
+      setShowUpgradeModal(true);
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
 
@@ -500,26 +512,50 @@ export function PDFReportButton({ shop }: PDFReportButtonProps) {
 
   return (
     <div>
-      <button
-        onClick={generatePDF}
-        disabled={isGenerating}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 shadow-sm"
-      >
-        {isGenerating ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Generiere Report...
-          </>
-        ) : (
-          <>
-            <FileDown className="w-4 h-4" />
-            Report herunterladen
-          </>
-        )}
-      </button>
+      {pdfAllowed ? (
+        <button
+          onClick={generatePDF}
+          disabled={isGenerating}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 shadow-sm"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Generiere Report...
+            </>
+          ) : (
+            <>
+              <FileDown className="w-4 h-4" />
+              Report herunterladen
+            </>
+          )}
+        </button>
+      ) : (
+        <button
+          onClick={() => setShowUpgradeModal(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors shadow-sm group relative"
+        >
+          <FileDown className="w-4 h-4" />
+          Report herunterladen
+          <Lock className="w-3.5 h-3.5 text-amber-500" />
+          <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-foreground text-background text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+            Ab Starter Plan verfügbar
+          </span>
+        </button>
+      )}
       {error && (
         <p className="text-red-500 text-xs mt-1">{error}</p>
       )}
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        feature="PDF Reports"
+        reason="PDF Reports zum Teilen und Archivieren sind ab dem Starter Plan verfügbar."
+        recommendedPlan="starter"
+        shop={shop}
+      />
     </div>
   );
 }

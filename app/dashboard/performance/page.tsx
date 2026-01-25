@@ -18,8 +18,12 @@ import {
   MousePointer,
   Layout,
   Smartphone,
-  Monitor
+  Monitor,
+  Lock,
+  Crown
 } from 'lucide-react';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeModal } from '@/components/UpgradeModal';
 
 interface PerformanceData {
   scores: {
@@ -182,6 +186,9 @@ export default function PerformancePage() {
   const [customUrl, setCustomUrl] = useState('');
   const [strategy, setStrategy] = useState<'mobile' | 'desktop'>('mobile');
   const [hasRunOnce, setHasRunOnce] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  
+  const { canUseDesktop, canRunPerformanceTest, usage, plan } = usePlan();
 
   useEffect(() => {
     const shopParam = searchParams.get('shop');
@@ -214,6 +221,24 @@ export default function PerformancePage() {
     const targetUrl = url || customUrl;
     if (!targetUrl) return;
 
+    // Check plan limits
+    const perfCheck = canRunPerformanceTest();
+    if (!perfCheck.allowed) {
+      setError(perfCheck.reason || 'Limit erreicht');
+      setShowUpgradeModal(true);
+      return;
+    }
+
+    // Check desktop permission
+    if (strategy === 'desktop') {
+      const desktopCheck = canUseDesktop();
+      if (!desktopCheck.allowed) {
+        setError(desktopCheck.reason || 'Desktop nicht verfügbar');
+        setShowUpgradeModal(true);
+        return;
+      }
+    }
+
     setIsLoading(true);
     setError(null);
     setHasRunOnce(true);
@@ -222,12 +247,15 @@ export default function PerformancePage() {
       const response = await fetch('/api/performance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl, strategy }),
+        body: JSON.stringify({ url: targetUrl, strategy, shop }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.details || errorData.error || 'Analyse fehlgeschlagen');
+        if (errorData.upgradeRequired) {
+          setShowUpgradeModal(true);
+        }
+        throw new Error(errorData.message || errorData.details || errorData.error || 'Analyse fehlgeschlagen');
       }
 
       const result = await response.json();
@@ -332,18 +360,39 @@ export default function PerformancePage() {
                 <Smartphone className="w-4 h-4" />
                 Mobile
               </button>
-              <button
-                onClick={() => setStrategy('desktop')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  strategy === 'desktop'
-                    ? 'bg-card text-indigo-600 shadow-sm dark:bg-secondary'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Monitor className="w-4 h-4" />
-                Desktop
-              </button>
+              {canUseDesktop().allowed ? (
+                <button
+                  onClick={() => setStrategy('desktop')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    strategy === 'desktop'
+                      ? 'bg-card text-indigo-600 shadow-sm dark:bg-secondary'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Monitor className="w-4 h-4" />
+                  Desktop
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowUpgradeModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-all relative group"
+                >
+                  <Monitor className="w-4 h-4" />
+                  Desktop
+                  <Lock className="w-3 h-3 text-amber-500" />
+                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    Ab Starter Plan
+                  </span>
+                </button>
+              )}
             </div>
+            
+            {/* Usage indicator */}
+            {usage && usage.performanceTests.limit !== -1 && (
+              <div className="text-xs text-muted-foreground">
+                {usage.performanceTests.remaining} von {usage.performanceTests.limit} Tests übrig
+              </div>
+            )}
           </div>
         </div>
         
@@ -537,6 +586,16 @@ export default function PerformancePage() {
           </p>
         </div>
       )}
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        feature="Desktop Performance"
+        reason={canUseDesktop().reason || canRunPerformanceTest().reason || 'Upgrade erforderlich'}
+        recommendedPlan="starter"
+        shop={shop}
+      />
     </div>
   );
 }

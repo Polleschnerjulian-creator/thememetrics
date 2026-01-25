@@ -20,8 +20,12 @@ import {
   X,
   Info,
   Play,
-  ListOrdered
+  ListOrdered,
+  Lock,
+  Crown
 } from 'lucide-react';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeModal } from '@/components/UpgradeModal';
 
 interface Section {
   name: string;
@@ -580,6 +584,10 @@ function RecommendationsContent() {
   const [expandedGuides, setExpandedGuides] = useState<Set<string>>(new Set());
   const [completedRecs, setCompletedRecs] = useState<Set<string>>(new Set());
   const [filterPriority, setFilterPriority] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  
+  const { canUseCodeFixes, features, plan } = usePlan();
+  const codeFixesAllowed = canUseCodeFixes().allowed;
 
   useEffect(() => {
     const shopFromParams = searchParams.get('shop');
@@ -875,24 +883,60 @@ function RecommendationsContent() {
               {isExpanded && !isCompleted && (
                 <div className="border-t border-border bg-secondary/30 p-4 space-y-4">
                   {fix ? (
-                    <div className="space-y-3">
-                      <div>
-                        <h4 className="font-medium text-foreground mb-1">{fix.title}</h4>
-                        <p className="text-sm text-muted-foreground">{fix.description}</p>
+                    codeFixesAllowed ? (
+                      <div className="space-y-3">
+                        <div>
+                          <h4 className="font-medium text-foreground mb-1">{fix.title}</h4>
+                          <p className="text-sm text-muted-foreground">{fix.description}</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="px-2 py-1 bg-secondary rounded text-muted-foreground">📁 {fix.file}</span>
+                          {fix.lineHint && <span className="text-muted-foreground">{fix.lineHint}</span>}
+                        </div>
+                        {fix.codeBefore && <CodeBlock code={fix.codeBefore} label="❌ Vorher:" />}
+                        <CodeBlock code={fix.codeAfter} label="✅ Nachher:" />
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                          <p className="text-sm text-amber-700 dark:text-amber-300">💡 {fix.explanation}</p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="px-2 py-1 bg-secondary rounded text-muted-foreground">📁 {fix.file}</span>
-                        {fix.lineHint && <span className="text-muted-foreground">{fix.lineHint}</span>}
+                    ) : (
+                      /* Code Fix Locked for Free/Starter */
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-card/80 to-card z-10 flex items-center justify-center">
+                          <div className="text-center p-6">
+                            <div className="w-14 h-14 bg-indigo-100 dark:bg-indigo-900/50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                              <Lock className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <h4 className="font-semibold text-foreground mb-2">Code-Fixes freischalten</h4>
+                            <p className="text-sm text-muted-foreground mb-4 max-w-xs">
+                              Erhalte Copy-Paste fertigen Code für alle Optimierungen mit dem Pro Plan.
+                            </p>
+                            <button
+                              onClick={() => setShowUpgradeModal(true)}
+                              className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl font-medium transition-all inline-flex items-center gap-2"
+                            >
+                              <Crown className="w-4 h-4" />
+                              Upgrade auf Pro
+                            </button>
+                          </div>
+                        </div>
+                        {/* Blurred preview */}
+                        <div className="opacity-30 blur-sm pointer-events-none select-none">
+                          <div className="space-y-3">
+                            <div>
+                              <h4 className="font-medium text-foreground mb-1">{fix.title}</h4>
+                              <p className="text-sm text-muted-foreground">{fix.description}</p>
+                            </div>
+                            <div className="bg-secondary rounded-lg p-3 font-mono text-xs text-muted-foreground">
+                              {'// Code-Fix Preview...\n{{ section.settings.image | image_url... }}'}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      {fix.codeBefore && <CodeBlock code={fix.codeBefore} label="❌ Vorher:" />}
-                      <CodeBlock code={fix.codeAfter} label="✅ Nachher:" />
-                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
-                        <p className="text-sm text-amber-700 dark:text-amber-300">💡 {fix.explanation}</p>
-                      </div>
-                    </div>
+                    )
                   ) : (
                     <p className="text-sm text-muted-foreground">Für diese Empfehlung gibt es noch keinen automatischen Code-Fix. Nutze die Schritt-für-Schritt Anleitung.</p>
-                  )}
+                  )}}
 
                   <div className="border border-indigo-500/20 rounded-xl overflow-hidden">
                     <button onClick={() => toggleGuide(rec.id)} className="w-full flex items-center justify-between p-4 bg-indigo-500/5 hover:bg-indigo-500/10">
@@ -951,6 +995,16 @@ function RecommendationsContent() {
       {data.theme?.analyzedAt && (
         <p className="text-sm text-muted-foreground text-center">Basierend auf Analyse vom {new Date(data.theme.analyzedAt).toLocaleString('de-DE')}</p>
       )}
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        feature="Code-Fixes"
+        reason="Copy-Paste fertiger Code für alle Optimierungen ist ab dem Pro Plan verfügbar."
+        recommendedPlan="pro"
+        shop={shop}
+      />
     </div>
   );
 }
