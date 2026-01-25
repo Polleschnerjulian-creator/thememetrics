@@ -70,7 +70,11 @@ export function UpgradeModal({
       
       if (data.confirmationUrl) {
         // Redirect to Shopify billing confirmation
-        window.top?.location.href = data.confirmationUrl;
+        if (window.top) {
+          window.top.location.href = data.confirmationUrl;
+        } else {
+          window.location.href = data.confirmationUrl;
+        }
       } else if (data.error) {
         console.error('Upgrade error:', data.error);
       }
