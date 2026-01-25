@@ -68,13 +68,16 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const completed = localStorage.getItem('tm_onboarding_completed');
     const savedFixes = localStorage.getItem('tm_completed_fixes');
+    const savedStep = localStorage.getItem('tm_onboarding_step') as OnboardingStep | null;
     
     if (savedFixes) {
       setState(prev => ({ ...prev, completedFixes: JSON.parse(savedFixes) }));
     }
     
     if (!completed) {
-      setState(prev => ({ ...prev, currentStep: 'welcome', isOnboarding: true }));
+      // Restore saved step or start from welcome
+      const stepToUse = savedStep || 'welcome';
+      setState(prev => ({ ...prev, currentStep: stepToUse, isOnboarding: true }));
     }
   }, []);
 
@@ -89,10 +92,17 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   };
 
   const setStep = (step: OnboardingStep) => {
+    console.log('setStep called with:', step);
     setState(prev => ({ ...prev, currentStep: step }));
+    
+    // Persist step to localStorage so it survives re-renders
+    if (step !== 'done') {
+      localStorage.setItem('tm_onboarding_step', step);
+    }
     
     if (step === 'done') {
       localStorage.setItem('tm_onboarding_completed', 'true');
+      localStorage.removeItem('tm_onboarding_step');
       setState(prev => ({ ...prev, isOnboarding: false }));
     }
   };
