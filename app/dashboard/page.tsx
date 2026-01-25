@@ -3,7 +3,8 @@
 import { ScoreCircle } from '@/components/ui/score-circle';
 import { DashboardSkeleton } from '@/components/ui/skeleton';
 import { TrendChart, TrendBadge } from '@/components/dashboard/TrendChart';
-import { OnboardingModal, OnboardingChecklist } from '@/components/dashboard/Onboarding';
+import { OnboardingChecklist } from '@/components/dashboard/Onboarding';
+import { OnboardingWrapper } from '@/components/onboarding';
 import { QuickWins } from '@/components/dashboard/ActionableRecs';
 import { PDFReportButton } from '@/components/dashboard/PDFReport';
 import { RevenueCalculator, RevenueImpactCard } from '@/components/dashboard/RevenueCalculator';
@@ -381,13 +382,17 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Onboarding Modal */}
-      {showOnboarding && (
-        <OnboardingModal 
-          onComplete={handleOnboardingComplete}
-          onStartAnalysis={runAnalysis}
-        />
-      )}
+      {/* New Onboarding System */}
+      <OnboardingWrapper
+        shop={shop}
+        themeName={analysis?.theme?.name || ''}
+        onStartAnalysis={runAnalysis}
+        analysisData={analysis ? {
+          score: analysis.score?.overall || 0,
+          sections: analysis.analysis?.sections || [],
+        } : null}
+        isAnalyzing={isAnalyzing}
+      />
 
       {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-10">
