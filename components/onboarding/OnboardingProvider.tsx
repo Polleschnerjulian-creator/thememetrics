@@ -45,6 +45,8 @@ interface OnboardingContextType extends OnboardingState {
   markFixComplete: (fixId: string) => void;
   skipOnboarding: () => void;
   resetOnboarding: () => void;
+  showAppTour: boolean;
+  setShowAppTour: (show: boolean) => void;
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
@@ -64,6 +66,8 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     results: null,
     completedFixes: [],
   });
+  
+  const [showAppTour, setShowAppTour] = useState(false);
 
   // Check if user has completed onboarding before
   useEffect(() => {
@@ -108,6 +112,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('tm_onboarding_completed', 'true');
       localStorage.removeItem('tm_onboarding_step');
       setState(prev => ({ ...prev, isOnboarding: false }));
+      
+      // Show app tour if not completed before
+      const tourDone = localStorage.getItem('tm_app_tour_completed');
+      if (!tourDone) {
+        setTimeout(() => setShowAppTour(true), 300);
+      }
     }
   };
 
@@ -165,6 +175,8 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
         markFixComplete,
         skipOnboarding,
         resetOnboarding,
+        showAppTour,
+        setShowAppTour,
       }}
     >
       {children}

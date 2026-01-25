@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X, ChevronRight, ChevronLeft, Sparkles, BarChart3, Lightbulb, Image, Accessibility, Gauge } from 'lucide-react';
+import { useOnboarding } from './OnboardingProvider';
 
 interface TourStep {
-  target: string; // CSS selector or menu item name
+  target: string;
   title: string;
   description: string;
   icon: React.ElementType;
-  position: 'center' | 'left' | 'right';
 }
 
 const tourSteps: TourStep[] = [
@@ -17,59 +17,42 @@ const tourSteps: TourStep[] = [
     title: 'Dashboard',
     description: 'Hier siehst du deinen Gesamt-Score, Trends und Quick-Wins auf einen Blick.',
     icon: BarChart3,
-    position: 'center',
   },
   {
     target: 'themes',
     title: 'Theme Analysis',
     description: 'Detaillierte Analyse jeder einzelnen Section deines Themes mit konkreten Empfehlungen.',
     icon: Sparkles,
-    position: 'center',
   },
   {
     target: 'performance',
     title: 'Performance',
     description: 'Core Web Vitals und Lighthouse Scores - teste jede URL deines Shops.',
     icon: Gauge,
-    position: 'center',
   },
   {
     target: 'accessibility',
     title: 'Accessibility',
     description: 'Prüfe dein Theme auf Barrierefreiheit und WCAG-Konformität.',
     icon: Accessibility,
-    position: 'center',
   },
   {
     target: 'images',
     title: 'Bildoptimierung',
     description: 'Finde zu große Bilder und fehlende Lazy-Loading Attribute.',
     icon: Image,
-    position: 'center',
   },
   {
     target: 'recommendations',
     title: 'Empfehlungen',
     description: 'Alle Optimierungen priorisiert nach Impact und Aufwand - mit Copy-Paste Code.',
     icon: Lightbulb,
-    position: 'center',
   },
 ];
 
 export function AppTour() {
-  const [isVisible, setIsVisible] = useState(false);
+  const { showAppTour, setShowAppTour } = useOnboarding();
   const [currentStep, setCurrentStep] = useState(0);
-
-  useEffect(() => {
-    // Check if tour should show (after onboarding, but tour not completed)
-    const onboardingDone = localStorage.getItem('tm_onboarding_completed');
-    const tourDone = localStorage.getItem('tm_app_tour_completed');
-    
-    if (onboardingDone && !tourDone) {
-      // Small delay to let the page render
-      setTimeout(() => setIsVisible(true), 500);
-    }
-  }, []);
 
   const handleNext = () => {
     if (currentStep < tourSteps.length - 1) {
@@ -87,15 +70,15 @@ export function AppTour() {
 
   const completeTour = () => {
     localStorage.setItem('tm_app_tour_completed', 'true');
-    setIsVisible(false);
+    setShowAppTour(false);
   };
 
   const skipTour = () => {
     localStorage.setItem('tm_app_tour_completed', 'true');
-    setIsVisible(false);
+    setShowAppTour(false);
   };
 
-  if (!isVisible) return null;
+  if (!showAppTour) return null;
 
   const step = tourSteps[currentStep];
   const Icon = step.icon;
