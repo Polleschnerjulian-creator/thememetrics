@@ -92,8 +92,11 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   };
 
   const setStep = (step: OnboardingStep) => {
-    console.log('setStep called with:', step);
-    setState(prev => ({ ...prev, currentStep: step }));
+    setState(prev => {
+      // Prevent setting to the same step (avoid loops)
+      if (prev.currentStep === step) return prev;
+      return { ...prev, currentStep: step };
+    });
     
     // Persist step to localStorage so it survives re-renders
     if (step !== 'done') {

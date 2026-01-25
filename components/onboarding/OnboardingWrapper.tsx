@@ -25,6 +25,37 @@ interface OnboardingWrapperProps {
   isAnalyzing: boolean;
 }
 
+function calculateResults(analysisData: OnboardingWrapperProps['analysisData']) {
+  if (!analysisData) return null;
+  
+  const criticalSections = analysisData.sections
+    .filter(s => s.performanceScore < 85)
+    .sort((a, b) => a.performanceScore - b.performanceScore)
+    .slice(0, 5)
+    .map(s => ({
+      name: s.name.replace('.liquid', ''),
+      score: s.performanceScore,
+      monthlyLoss: Math.max(50, Math.round((85 - s.performanceScore) * 8)),
+    }));
+
+  const sectionsToShow = criticalSections.length > 0 ? criticalSections : [
+    { name: 'Allgemeine Optimierung', score: analysisData.score, monthlyLoss: 127 }
+  ];
+
+  const totalMonthlyLoss = sectionsToShow.reduce((sum, s) => sum + s.monthlyLoss, 0);
+  
+  const percentile = analysisData.score >= 80 ? 75 : 
+                     analysisData.score >= 70 ? 55 :
+                     analysisData.score >= 60 ? 35 : 20;
+
+  return {
+    score: analysisData.score,
+    criticalSections: sectionsToShow,
+    totalMonthlyLoss,
+    percentile,
+  };
+}
+
 export function OnboardingWrapper({ 
   shop, 
   themeName, 
@@ -42,120 +73,52 @@ export function OnboardingWrapper({
   } = useOnboarding();
   
   const hasSetInitialResults = useRef(false);
+  const analysisStarted = useRef(false);
 
-  // If analysis data already exists when onboarding starts, set results immediately
+  // Set results once when analysis data exists and we're onboarding
   useEffect(() => {
-    if (analysisData && isOnboarding && !results && !hasSetInitialResults.current) {
+    if (analysisData && isOnboarding && !hasSetInitialResults.current) {
       hasSetInitialResults.current = true;
-      
-      const criticalSections = analysisData.sections
-        .filter(s => s.performanceScore < 85)
-        .sort((a, b) => a.performanceScore - b.performanceScore)
-        .slice(0, 5)
-        .map(s => ({
-          name: s.name.replace('.liquid', ''),
-          score: s.performanceScore,
-          monthlyLoss: Math.max(50, Math.round((85 - s.performanceScore) * 8)),
-        }));
-
-      const sectionsToShow = criticalSections.length > 0 ? criticalSections : [
-        { name: 'Allgemeine Optimierung', score: analysisData.score, monthlyLoss: 127 }
-      ];
-
-      const totalMonthlyLoss = sectionsToShow.reduce((sum, s) => sum + s.monthlyLoss, 0);
-      
-      const percentile = analysisData.score >= 80 ? 75 : 
-                         analysisData.score >= 70 ? 55 :
-                         analysisData.score >= 60 ? 35 : 20;
-
-      setResults({
-        score: analysisData.score,
-        criticalSections: sectionsToShow,
-        totalMonthlyLoss,
-        percentile,
-      });
+      const calculatedResults = calculateResults(analysisData);
+      if (calculatedResults) {
+        setResults(calculatedResults);
+      }
     }
-  }, [analysisData, isOnboarding, results, setResults]);
+  }, [analysisData, isOnboarding, setResults]);
 
-  // Simulate analysis progress when analyzing
+  // Handle analysis progress simulation
   useEffect(() => {
-    if (!isAnalyzing || currentStep !== 'analyzing') return;
+    if (!isAnalyzing || currentStep !== 'analyzing' || analysisStarted.current) return;
+    
+    analysisStarted.current = true;
 
-    const steps = [
+    const progressSteps = [
       { step: 'theme', delay: 500 },
       { step: 'sections', delay: 1500 },
       { step: 'analyze', delay: 2500 },
       { step: 'vitals', delay: 8000 },
       { step: 'score', delay: 12000 },
-      { step: 'complete', delay: 14000 },
     ];
 
-    const timers: NodeJS.Timeout[] = [];
-    let sectionCount = 0;
-    const totalSections = 24;
-
-    steps.forEach(({ step, delay }, index) => {
-      const timer = setTimeout(() => {
-        if (step === 'analyze') {
-          const sectionTimer = setInterval(() => {
-            sectionCount++;
-            updateAnalysisProgress(step, sectionCount, totalSections);
-            if (sectionCount >= totalSections) {
-              clearInterval(sectionTimer);
-            }
-          }, 200);
-          timers.push(sectionTimer as unknown as NodeJS.Timeout);
-        } else {
-          updateAnalysisProgress(step, index + 1, steps.length);
-        }
+    progressSteps.forEach(({ step, delay }, index) => {
+      setTimeout(() => {
+        updateAnalysisProgress(step, index + 1, progressSteps.length);
       }, delay);
-      timers.push(timer);
     });
-
-    return () => {
-      timers.forEach(timer => clearTimeout(timer));
-    };
   }, [isAnalyzing, currentStep, updateAnalysisProgress]);
 
-  // When analysis completes during onboarding, set results
+  // When analysis finishes, move to score reveal
   useEffect(() => {
-    if (analysisData && currentStep === 'analyzing') {
-      const criticalSections = analysisData.sections
-        .filter(s => s.performanceScore < 85)
-        .sort((a, b) => a.performanceScore - b.performanceScore)
-        .slice(0, 5)
-        .map(s => ({
-          name: s.name.replace('.liquid', ''),
-          score: s.performanceScore,
-          monthlyLoss: Math.max(50, Math.round((85 - s.performanceScore) * 8)),
-        }));
-
-      const sectionsToShow = criticalSections.length > 0 ? criticalSections : [
-        { name: 'Allgemeine Optimierung', score: analysisData.score, monthlyLoss: 127 }
-      ];
-
-      const totalMonthlyLoss = sectionsToShow.reduce((sum, s) => sum + s.monthlyLoss, 0);
-      
-      const percentile = analysisData.score >= 80 ? 75 : 
-                         analysisData.score >= 70 ? 55 :
-                         analysisData.score >= 60 ? 35 : 20;
-
-      setResults({
-        score: analysisData.score,
-        criticalSections: sectionsToShow,
-        totalMonthlyLoss,
-        percentile,
-      });
-
+    if (analysisData && currentStep === 'analyzing' && !isAnalyzing) {
+      const calculatedResults = calculateResults(analysisData);
+      if (calculatedResults) {
+        setResults(calculatedResults);
+      }
       setTimeout(() => {
-        updateAnalysisProgress('complete', 100, 100);
+        setStep('score-reveal');
       }, 500);
     }
-  }, [analysisData, currentStep, setResults, updateAnalysisProgress]);
-
-  const handleAnalysisComplete = () => {
-    // Results reveal will show automatically via setStep in AnalysisProgress
-  };
+  }, [analysisData, currentStep, isAnalyzing, setResults, setStep]);
 
   if (!isOnboarding) return null;
 
@@ -168,7 +131,7 @@ export function OnboardingWrapper({
         themeName={themeName}
         onStartAnalysis={onStartAnalysis}
       />
-      <AnalysisProgress onComplete={handleAnalysisComplete} />
+      <AnalysisProgress onComplete={() => {}} />
       <ResultsReveal />
       <GuidedFix />
       <CompletionCelebration />
