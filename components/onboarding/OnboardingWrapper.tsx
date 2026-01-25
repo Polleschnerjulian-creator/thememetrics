@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { 
   useOnboarding,
   WelcomeModal, 
@@ -37,8 +37,45 @@ export function OnboardingWrapper({
     isOnboarding, 
     setStep, 
     updateAnalysisProgress, 
-    setResults 
+    setResults,
+    results 
   } = useOnboarding();
+  
+  const hasSetInitialResults = useRef(false);
+
+  // If analysis data already exists when onboarding starts, set results immediately
+  useEffect(() => {
+    if (analysisData && isOnboarding && !results && !hasSetInitialResults.current) {
+      hasSetInitialResults.current = true;
+      
+      const criticalSections = analysisData.sections
+        .filter(s => s.performanceScore < 85)
+        .sort((a, b) => a.performanceScore - b.performanceScore)
+        .slice(0, 5)
+        .map(s => ({
+          name: s.name.replace('.liquid', ''),
+          score: s.performanceScore,
+          monthlyLoss: Math.max(50, Math.round((85 - s.performanceScore) * 8)),
+        }));
+
+      const sectionsToShow = criticalSections.length > 0 ? criticalSections : [
+        { name: 'Allgemeine Optimierung', score: analysisData.score, monthlyLoss: 127 }
+      ];
+
+      const totalMonthlyLoss = sectionsToShow.reduce((sum, s) => sum + s.monthlyLoss, 0);
+      
+      const percentile = analysisData.score >= 80 ? 75 : 
+                         analysisData.score >= 70 ? 55 :
+                         analysisData.score >= 60 ? 35 : 20;
+
+      setResults({
+        score: analysisData.score,
+        criticalSections: sectionsToShow,
+        totalMonthlyLoss,
+        percentile,
+      });
+    }
+  }, [analysisData, isOnboarding, results, setResults]);
 
   // Simulate analysis progress when analyzing
   useEffect(() => {
@@ -55,15 +92,13 @@ export function OnboardingWrapper({
 
     const timers: NodeJS.Timeout[] = [];
     let sectionCount = 0;
-    const totalSections = 24; // Estimated
+    const totalSections = 24;
 
     steps.forEach(({ step, delay }, index) => {
       const timer = setTimeout(() => {
         if (step === 'analyze') {
-          // Simulate section-by-section progress
           const sectionTimer = setInterval(() => {
             sectionCount++;
-            const percent = Math.round((index / steps.length) * 100) + Math.round((sectionCount / totalSections) * 20);
             updateAnalysisProgress(step, sectionCount, totalSections);
             if (sectionCount >= totalSections) {
               clearInterval(sectionTimer);
@@ -71,7 +106,6 @@ export function OnboardingWrapper({
           }, 200);
           timers.push(sectionTimer as unknown as NodeJS.Timeout);
         } else {
-          const percent = Math.round(((index + 1) / steps.length) * 100);
           updateAnalysisProgress(step, index + 1, steps.length);
         }
       }, delay);
@@ -83,35 +117,36 @@ export function OnboardingWrapper({
     };
   }, [isAnalyzing, currentStep, updateAnalysisProgress]);
 
-  // When analysis completes, set results
+  // When analysis completes during onboarding, set results
   useEffect(() => {
     if (analysisData && currentStep === 'analyzing') {
-      // Calculate results from analysis data
       const criticalSections = analysisData.sections
-        .filter(s => s.performanceScore < 70)
+        .filter(s => s.performanceScore < 85)
         .sort((a, b) => a.performanceScore - b.performanceScore)
         .slice(0, 5)
         .map(s => ({
           name: s.name.replace('.liquid', ''),
           score: s.performanceScore,
-          monthlyLoss: Math.round((70 - s.performanceScore) * 12), // Rough estimate
+          monthlyLoss: Math.max(50, Math.round((85 - s.performanceScore) * 8)),
         }));
 
-      const totalMonthlyLoss = criticalSections.reduce((sum, s) => sum + s.monthlyLoss, 0);
+      const sectionsToShow = criticalSections.length > 0 ? criticalSections : [
+        { name: 'Allgemeine Optimierung', score: analysisData.score, monthlyLoss: 127 }
+      ];
+
+      const totalMonthlyLoss = sectionsToShow.reduce((sum, s) => sum + s.monthlyLoss, 0);
       
-      // Calculate percentile (simplified - in reality would compare to benchmark)
       const percentile = analysisData.score >= 80 ? 75 : 
                          analysisData.score >= 70 ? 55 :
                          analysisData.score >= 60 ? 35 : 20;
 
       setResults({
         score: analysisData.score,
-        criticalSections,
+        criticalSections: sectionsToShow,
         totalMonthlyLoss,
         percentile,
       });
 
-      // Move to score reveal after a short delay
       setTimeout(() => {
         updateAnalysisProgress('complete', 100, 100);
       }, 500);

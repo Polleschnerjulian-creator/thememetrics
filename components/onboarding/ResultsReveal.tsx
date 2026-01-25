@@ -142,20 +142,38 @@ export function ResultsReveal() {
   if (currentStep === 'problems-reveal') {
     const criticalCount = results.criticalSections.filter(s => s.score < 50).length;
     const warningCount = results.criticalSections.filter(s => s.score >= 50 && s.score < 70).length;
+    const improvementCount = results.criticalSections.filter(s => s.score >= 70 && s.score < 85).length;
+    const totalCount = results.criticalSections.length;
+
+    // Determine messaging based on score quality
+    const isGoodScore = results.score >= 70;
+    const headerIcon = isGoodScore ? Sparkles : AlertTriangle;
+    const headerBgColor = isGoodScore ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-red-100 dark:bg-red-900/30';
+    const headerIconColor = isGoodScore ? 'text-amber-500' : 'text-red-500';
 
     return (
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div className="bg-card rounded-3xl max-w-md w-full overflow-hidden shadow-2xl">
           <div className="p-8">
             <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle className="w-8 h-8 text-red-500" />
+              <div className={`w-16 h-16 ${headerBgColor} rounded-full flex items-center justify-center mx-auto mb-4`}>
+                {isGoodScore ? (
+                  <Sparkles className={`w-8 h-8 ${headerIconColor}`} />
+                ) : (
+                  <AlertTriangle className={`w-8 h-8 ${headerIconColor}`} />
+                )}
               </div>
               <h2 className="text-2xl font-bold text-foreground mb-2">
-                Aber: Wir haben {criticalCount + warningCount} problematische Sections gefunden
+                {isGoodScore 
+                  ? `Gut! Aber es gibt noch ${totalCount} Optimierungsmöglichkeiten`
+                  : `Wir haben ${criticalCount + warningCount} problematische Sections gefunden`
+                }
               </h2>
               <p className="text-muted-foreground">
-                Diese Sections bremsen deine Performance
+                {isGoodScore 
+                  ? 'Diese Sections haben noch Verbesserungspotenzial'
+                  : 'Diese Sections bremsen deine Performance'
+                }
               </p>
             </div>
 
@@ -166,18 +184,22 @@ export function ResultsReveal() {
                   key={i}
                   className={`flex items-center justify-between p-4 rounded-xl ${
                     section.score < 50 ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800' :
-                    'bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800'
+                    section.score < 70 ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800' :
+                    'bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800'
                   }`}
                   style={{ animationDelay: `${i * 100}ms` }}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-3 h-3 rounded-full ${
-                      section.score < 50 ? 'bg-red-500' : 'bg-amber-500'
+                      section.score < 50 ? 'bg-red-500' : 
+                      section.score < 70 ? 'bg-amber-500' : 'bg-blue-500'
                     }`} />
                     <span className="font-medium text-foreground">{section.name}</span>
                   </div>
                   <span className={`font-bold ${
-                    section.score < 50 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+                    section.score < 50 ? 'text-red-600 dark:text-red-400' : 
+                    section.score < 70 ? 'text-amber-600 dark:text-amber-400' : 
+                    'text-blue-600 dark:text-blue-400'
                   }`}>
                     {section.score}/100
                   </span>
@@ -190,7 +212,7 @@ export function ResultsReveal() {
               onClick={() => setStep('money-impact')}
               className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-2xl font-semibold transition-all flex items-center justify-center gap-2 group"
             >
-              Was kostet mich das?
+              {isGoodScore ? 'Was kann ich noch gewinnen?' : 'Was kostet mich das?'}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
