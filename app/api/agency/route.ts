@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Shop parameter required' }, { status: 400 });
     }
 
-    // Get store and verify agency plan
     const store = await db.query.stores.findFirst({
       where: eq(schema.stores.shopDomain, shop),
     });
@@ -34,23 +33,20 @@ export async function GET(request: NextRequest) {
       }, { status: 403 });
     }
 
-    // Get or create agency for this store
     let agency = await db.query.agencies.findFirst({
       where: eq(schema.agencies.ownerStoreId, store.id),
     });
 
     if (!agency) {
-      // Auto-create agency for agency plan subscribers
       const [newAgency] = await db.insert(schema.agencies)
         .values({
           name: shop.replace('.myshopify.com', ''),
-          ownerEmail: '', // Will be set later
+          ownerEmail: '',
           ownerStoreId: store.id,
         })
         .returning();
       agency = newAgency;
 
-      // Create default workspace for the owner's store
       await db.insert(schema.workspaces)
         .values({
           agencyId: agency.id,
@@ -60,12 +56,10 @@ export async function GET(request: NextRequest) {
         });
     }
 
-    // Get workspaces
     const workspaces = await db.query.workspaces.findMany({
       where: eq(schema.workspaces.agencyId, agency.id),
     });
 
-    // Get team members
     const teamMembers = await db.query.teamMembers.findMany({
       where: eq(schema.teamMembers.agencyId, agency.id),
     });
@@ -79,7 +73,7 @@ export async function GET(request: NextRequest) {
         maxWorkspaces: agency.maxWorkspaces,
         maxTeamMembers: agency.maxTeamMembers,
       },
-      workspaces: workspaces.map((w: typeof workspaces[number]) => ({
+      workspaces: workspaces.map((w) => ({
         id: w.id,
         name: w.name,
         shopDomain: w.shopDomain,
@@ -89,7 +83,7 @@ export async function GET(request: NextRequest) {
         notes: w.notes,
         createdAt: w.createdAt,
       })),
-      teamMembers: teamMembers.map((m: typeof teamMembers[number]) => ({
+      teamMembers: teamMembers.map((m) => ({
         id: m.id,
         email: m.email,
         name: m.name,
@@ -110,7 +104,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PUT: Update agency settings (name, logo, colors)
+// PUT: Update agency settings
 export async function PUT(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -137,7 +131,6 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Agency not found' }, { status: 404 });
     }
 
-    // Update agency
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (body.name) updateData.name = body.name;
     if (body.logoBase64) updateData.logoBase64 = body.logoBase64;

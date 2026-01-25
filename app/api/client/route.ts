@@ -15,7 +15,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Access token required' }, { status: 400 });
     }
 
-    // Find workspace by token
     const workspace = await db.query.workspaces.findFirst({
       where: eq(schema.workspaces.clientAccessToken, token),
     });
@@ -32,7 +31,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Workspace is inactive' }, { status: 403 });
     }
 
-    // Check password if set
     if (workspace.clientAccessPassword && workspace.clientAccessPassword !== password) {
       return NextResponse.json({ 
         error: 'Password required',
@@ -40,19 +38,16 @@ export async function GET(request: NextRequest) {
       }, { status: 401 });
     }
 
-    // Get agency for branding
     const agency = await db.query.agencies.findFirst({
       where: eq(schema.agencies.id, workspace.agencyId),
     });
 
-    // Log access
     await db.insert(schema.clientAccessLog).values({
       workspaceId: workspace.id,
       ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
       userAgent: request.headers.get('user-agent') || 'unknown',
     });
 
-    // Get store data
     const store = workspace.storeId 
       ? await db.query.stores.findFirst({
           where: eq(schema.stores.id, workspace.storeId),
@@ -75,40 +70,34 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get latest theme analysis
     const latestAnalysis = await db.query.themeAnalyses.findFirst({
       where: eq(schema.themeAnalyses.storeId, store.id),
       orderBy: desc(schema.themeAnalyses.analyzedAt),
     });
 
-    // Get section analyses if we have an analysis
-    let sectionAnalyses: any[] = [];
-    if (latestAnalysis) {
-      sectionAnalyses = await db.query.sectionAnalyses.findMany({
-        where: eq(schema.sectionAnalyses.analysisId, latestAnalysis.id),
-      });
-    }
+    const sectionAnalyses = latestAnalysis 
+      ? await db.query.sectionAnalyses.findMany({
+          where: eq(schema.sectionAnalyses.analysisId, latestAnalysis.id),
+        })
+      : [];
 
-    // Get analysis history (last 5)
     const analysisHistory = await db.query.themeAnalyses.findMany({
       where: eq(schema.themeAnalyses.storeId, store.id),
       orderBy: desc(schema.themeAnalyses.analyzedAt),
       limit: 10,
     });
 
-    // Calculate summary stats
-    const criticalSections = sectionAnalyses.filter(s => s.performanceScore < 40).length;
-    const warningSections = sectionAnalyses.filter(s => s.performanceScore >= 40 && s.performanceScore < 60).length;
-    const goodSections = sectionAnalyses.filter(s => s.performanceScore >= 60).length;
+    const criticalSections = sectionAnalyses.filter((s) => s.performanceScore < 40).length;
+    const warningSections = sectionAnalyses.filter((s) => s.performanceScore >= 40 && s.performanceScore < 60).length;
+    const goodSections = sectionAnalyses.filter((s) => s.performanceScore >= 60).length;
 
-    // Get top recommendations (without code fixes - those are agency only)
     const topRecommendations = sectionAnalyses
-      .flatMap(s => (s.recommendations || []).map((r: string) => ({
+      .flatMap((s) => ((s.recommendations as string[]) || []).map((r) => ({
         section: s.sectionName,
         recommendation: r,
         score: s.performanceScore,
       })))
-      .filter(r => r.score < 60)
+      .filter((r) => r.score < 60)
       .slice(0, 10);
 
     return NextResponse.json({
@@ -141,15 +130,15 @@ export async function GET(request: NextRequest) {
           good: goodSections,
           total: sectionAnalyses.length,
         },
-        sections: sectionAnalyses.map(s => ({
+        sections: sectionAnalyses.map((s) => ({
           name: s.sectionName,
           type: s.sectionType,
           category: s.category,
           score: s.performanceScore,
-          recommendationsCount: (s.recommendations || []).length,
+          recommendationsCount: ((s.recommendations as string[]) || []).length,
         })),
         recommendations: topRecommendations,
-        history: analysisHistory.map(a => ({
+        history: analysisHistory.map((a) => ({
           score: a.overallScore,
           date: a.analyzedAt,
           themeName: a.themeName,

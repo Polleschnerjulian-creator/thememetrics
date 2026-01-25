@@ -5,7 +5,6 @@ import { db, schema } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 
-// Helper to generate secure tokens
 function generateToken(): string {
   return randomBytes(32).toString('hex');
 }
@@ -25,7 +24,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name and shopDomain required' }, { status: 400 });
     }
 
-    // Get store and agency
     const store = await db.query.stores.findFirst({
       where: eq(schema.stores.shopDomain, shop),
     });
@@ -42,7 +40,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Agency not found' }, { status: 404 });
     }
 
-    // Check workspace limit
     const existingWorkspaces = await db.query.workspaces.findMany({
       where: eq(schema.workspaces.agencyId, agency.id),
     });
@@ -55,8 +52,7 @@ export async function POST(request: NextRequest) {
       }, { status: 403 });
     }
 
-    // Check if shop domain is already in a workspace
-    const existingShop = existingWorkspaces.find(w => w.shopDomain === body.shopDomain);
+    const existingShop = existingWorkspaces.find((w) => w.shopDomain === body.shopDomain);
     if (existingShop) {
       return NextResponse.json({ 
         error: 'Shop already exists in a workspace',
@@ -64,12 +60,10 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Check if the shop is connected (exists in stores table)
     const targetStore = await db.query.stores.findFirst({
       where: eq(schema.stores.shopDomain, body.shopDomain),
     });
 
-    // Create workspace
     const [workspace] = await db.insert(schema.workspaces)
       .values({
         agencyId: agency.id,
@@ -110,7 +104,6 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Shop and workspace ID required' }, { status: 400 });
     }
 
-    // Verify ownership
     const store = await db.query.stores.findFirst({
       where: eq(schema.stores.shopDomain, shop),
     });
@@ -138,15 +131,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
-    // Build update object
-    const updateData: any = { updatedAt: new Date() };
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (body.name !== undefined) updateData.name = body.name;
     if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
     if (body.clientAccessEnabled !== undefined) updateData.clientAccessEnabled = body.clientAccessEnabled;
     if (body.clientAccessPassword !== undefined) updateData.clientAccessPassword = body.clientAccessPassword;
     
-    // Regenerate client access token if requested
     if (body.regenerateToken) {
       updateData.clientAccessToken = generateToken();
     }
@@ -185,7 +176,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Shop and workspace ID required' }, { status: 400 });
     }
 
-    // Verify ownership
     const store = await db.query.stores.findFirst({
       where: eq(schema.stores.shopDomain, shop),
     });
@@ -213,22 +203,18 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
-    // Don't allow deleting the owner's workspace
     if (workspace.storeId === store.id) {
       return NextResponse.json({ 
         error: 'Cannot delete your primary workspace' 
       }, { status: 400 });
     }
 
-    // Delete workspace member access first
     await db.delete(schema.workspaceMemberAccess)
       .where(eq(schema.workspaceMemberAccess.workspaceId, workspace.id));
 
-    // Delete client access logs
     await db.delete(schema.clientAccessLog)
       .where(eq(schema.clientAccessLog.workspaceId, workspace.id));
 
-    // Delete workspace
     await db.delete(schema.workspaces)
       .where(eq(schema.workspaces.id, workspace.id));
 
