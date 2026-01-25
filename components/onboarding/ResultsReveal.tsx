@@ -8,17 +8,24 @@ export function ResultsReveal() {
   const { currentStep, setStep, results } = useOnboarding();
   const [animatedScore, setAnimatedScore] = useState(0);
   const [showContent, setShowContent] = useState(false);
-  const hasAnimated = useRef(false);
+  const animationStartedForScore = useRef<number | null>(null);
 
-  // Animate score counting up - only once
+  // Animate score counting up - only once per unique score
   useEffect(() => {
-    if (currentStep === 'score-reveal' && results && !hasAnimated.current) {
-      hasAnimated.current = true;
+    if (currentStep === 'score-reveal' && results && results.score > 0) {
+      // Only animate if we haven't animated this score before
+      if (animationStartedForScore.current === results.score) {
+        return;
+      }
+      
+      animationStartedForScore.current = results.score;
       setShowContent(false);
+      setAnimatedScore(0);
+      
       const target = results.score;
       const duration = 1500;
-      const steps = 60;
-      const increment = target / steps;
+      const totalSteps = 60;
+      const increment = target / totalSteps;
       let current = 0;
 
       const timer = setInterval(() => {
@@ -30,11 +37,18 @@ export function ResultsReveal() {
         } else {
           setAnimatedScore(Math.round(current));
         }
-      }, duration / steps);
+      }, duration / totalSteps);
 
       return () => clearInterval(timer);
     }
-  }, [currentStep, results]);
+  }, [currentStep, results?.score]);
+
+  // If we're on score-reveal but animation is done, show content
+  useEffect(() => {
+    if (currentStep === 'score-reveal' && results && animatedScore === results.score && !showContent) {
+      setTimeout(() => setShowContent(true), 100);
+    }
+  }, [currentStep, results, animatedScore, showContent]);
 
   if (!results) return null;
   
