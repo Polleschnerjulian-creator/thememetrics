@@ -2,8 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { eq, and } from 'drizzle-orm';
-import { PLANS } from '@/lib/billing';
+import { eq } from 'drizzle-orm';
 
 // GET: Get agency data with workspaces
 export async function GET(request: NextRequest) {
@@ -80,7 +79,7 @@ export async function GET(request: NextRequest) {
         maxWorkspaces: agency.maxWorkspaces,
         maxTeamMembers: agency.maxTeamMembers,
       },
-      workspaces: workspaces.map(w => ({
+      workspaces: workspaces.map((w: typeof workspaces[number]) => ({
         id: w.id,
         name: w.name,
         shopDomain: w.shopDomain,
@@ -90,7 +89,7 @@ export async function GET(request: NextRequest) {
         notes: w.notes,
         createdAt: w.createdAt,
       })),
-      teamMembers: teamMembers.map(m => ({
+      teamMembers: teamMembers.map((m: typeof teamMembers[number]) => ({
         id: m.id,
         email: m.email,
         name: m.name,
@@ -139,7 +138,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update agency
-    const updateData: any = { updatedAt: new Date() };
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (body.name) updateData.name = body.name;
     if (body.logoBase64) updateData.logoBase64 = body.logoBase64;
     if (body.logoUrl) updateData.logoUrl = body.logoUrl;
