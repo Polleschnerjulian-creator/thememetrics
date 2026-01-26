@@ -1,8 +1,22 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import Script from 'next/script';
+
+interface AppBridgeContextType {
+  isEmbedded: boolean;
+  getSessionToken: () => Promise<string | null>;
+  authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>;
+}
+
+const AppBridgeContext = createContext<AppBridgeContextType>({
+  isEmbedded: false,
+  getSessionToken: async () => null,
+  authenticatedFetch: async (url, options) => fetch(url, options),
+});
+
+export const useAppBridge = () => useContext(AppBridgeContext);
 
 interface AppBridgeProviderProps {
   children: React.ReactNode;
@@ -13,22 +27,61 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
   const host = searchParams.get('host');
   const shop = searchParams.get('shop');
   const [appBridgeReady, setAppBridgeReady] = useState(false);
+  const [isEmbedded, setIsEmbedded] = useState(false);
 
   useEffect(() => {
     // Check if we're running inside Shopify Admin (embedded)
-    const isEmbedded = window !== window.parent || Boolean(host);
-    
-    if (isEmbedded && host && (window as unknown as { shopify?: unknown }).shopify) {
-      // App Bridge is loaded via CDN script
-      setAppBridgeReady(true);
-    }
+    const embedded = typeof window !== 'undefined' && (window !== window.parent || Boolean(host));
+    setIsEmbedded(embedded);
   }, [host]);
+
+  // Get session token from App Bridge
+  const getSessionToken = useCallback(async (): Promise<string | null> => {
+    if (typeof window === 'undefined') return null;
+    
+    const shopifyGlobal = (window as unknown as { shopify?: { idToken: () => Promise<string> } }).shopify;
+    
+    if (shopifyGlobal && typeof shopifyGlobal.idToken === 'function') {
+      try {
+        const token = await shopifyGlobal.idToken();
+        return token;
+      } catch (error) {
+        console.error('Failed to get session token:', error);
+        return null;
+      }
+    }
+    return null;
+  }, []);
+
+  // Authenticated fetch that includes session token
+  const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
+    const token = await getSessionToken();
+    
+    const headers = new Headers(options.headers);
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    if (shop) {
+      headers.set('X-Shop-Domain', shop);
+    }
+    
+    return fetch(url, {
+      ...options,
+      headers,
+    });
+  }, [getSessionToken, shop]);
+
+  const contextValue: AppBridgeContextType = {
+    isEmbedded,
+    getSessionToken,
+    authenticatedFetch,
+  };
 
   // If we have a host parameter, we're embedded in Shopify Admin
   // Load App Bridge from Shopify CDN (required for embedded app checks)
   if (host) {
     return (
-      <>
+      <AppBridgeContext.Provider value={contextValue}>
         {/* Load App Bridge from Shopify CDN - REQUIRED for embedded app verification */}
         <Script
           src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
@@ -54,10 +107,14 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
           }}
         />
         {children}
-      </>
+      </AppBridgeContext.Provider>
     );
   }
 
   // Not embedded - render children directly
-  return <>{children}</>;
+  return (
+    <AppBridgeContext.Provider value={contextValue}>
+      {children}
+    </AppBridgeContext.Provider>
+  );
 }

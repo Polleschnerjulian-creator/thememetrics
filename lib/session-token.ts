@@ -1,11 +1,11 @@
-import { jwtVerify, importSPKI } from 'jose';
+import * as crypto from 'crypto';
 
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
 
 interface SessionTokenPayload {
   iss: string; // Issuer - the shop's admin URL
   dest: string; // Destination - the shop's domain
-  aud: string; // Audience - the API key
+  aud: string; // Audience - the API key (client ID)
   sub: string; // Subject - the user ID
   exp: number; // Expiration
   nbf: number; // Not before
@@ -15,20 +15,65 @@ interface SessionTokenPayload {
 }
 
 /**
- * Verify a Shopify session token
- * Session tokens are JWTs signed with your app's API secret
+ * Decode base64url to string
  */
-export async function verifySessionToken(token: string): Promise<SessionTokenPayload | null> {
-  try {
-    // Shopify session tokens are signed with HMAC SHA-256
-    const secret = new TextEncoder().encode(SHOPIFY_API_SECRET);
-    
-    const { payload } = await jwtVerify(token, secret, {
-      algorithms: ['HS256'],
-      audience: process.env.SHOPIFY_API_KEY,
-    });
+function base64UrlDecode(str: string): string {
+  // Replace URL-safe characters and add padding
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+  return Buffer.from(base64 + padding, 'base64').toString('utf-8');
+}
 
-    return payload as unknown as SessionTokenPayload;
+/**
+ * Verify a Shopify session token
+ * Session tokens are JWTs signed with HMAC SHA-256 using your app's API secret
+ */
+export function verifySessionToken(token: string): SessionTokenPayload | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      console.error('Invalid token format');
+      return null;
+    }
+
+    const [headerB64, payloadB64, signatureB64] = parts;
+
+    // Verify signature using HMAC SHA-256
+    const signatureInput = `${headerB64}.${payloadB64}`;
+    const expectedSignature = crypto
+      .createHmac('sha256', SHOPIFY_API_SECRET)
+      .update(signatureInput)
+      .digest('base64url');
+
+    if (signatureB64 !== expectedSignature) {
+      console.error('Invalid token signature');
+      return null;
+    }
+
+    // Decode and parse payload
+    const payload = JSON.parse(base64UrlDecode(payloadB64)) as SessionTokenPayload;
+
+    // Verify expiration
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp < now) {
+      console.error('Token expired');
+      return null;
+    }
+
+    // Verify not before
+    if (payload.nbf > now) {
+      console.error('Token not yet valid');
+      return null;
+    }
+
+    // Verify audience (should match our API key)
+    const expectedAudience = process.env.SHOPIFY_API_KEY;
+    if (expectedAudience && payload.aud !== expectedAudience) {
+      console.error('Invalid token audience');
+      return null;
+    }
+
+    return payload;
   } catch (error) {
     console.error('Session token verification failed:', error);
     return null;
@@ -63,4 +108,27 @@ export function getSessionTokenFromRequest(request: Request): string | null {
   }
   
   return null;
+}
+
+/**
+ * Verify request and extract shop domain
+ * Returns shop domain if valid, null otherwise
+ */
+export function verifyRequestAndGetShop(request: Request): string | null {
+  const token = getSessionTokenFromRequest(request);
+  
+  if (!token) {
+    // Fallback to query param or header for non-embedded requests
+    const url = new URL(request.url);
+    const shopFromQuery = url.searchParams.get('shop');
+    const shopFromHeader = request.headers.get('X-Shop-Domain');
+    return shopFromQuery || shopFromHeader || null;
+  }
+
+  const payload = verifySessionToken(token);
+  if (!payload) {
+    return null;
+  }
+
+  return getShopFromToken(payload);
 }
