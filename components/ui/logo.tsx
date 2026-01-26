@@ -10,23 +10,20 @@ export function Logo({ size = 40, showText = true, className = '' }: LogoProps) 
       <svg 
         width={size} 
         height={size} 
-        viewBox="0 0 64 64" 
+        viewBox="0 0 512 512" 
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <rect width="64" height="64" rx="16" fill="url(#logo-gradient)"/>
-        <path 
-          d="M18 44V34M26 44V26M34 44V20M42 44V14" 
-          stroke="white" 
-          strokeWidth="6" 
-          strokeLinecap="round"
-        />
         <defs>
-          <linearGradient id="logo-gradient" x1="0" y1="0" x2="64" y2="64">
-            <stop stopColor="#6366F1"/>
-            <stop offset="1" stopColor="#8B5CF6"/>
+          <linearGradient id="logo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#6366f1"/>
+            <stop offset="100%" stopColor="#8b5cf6"/>
           </linearGradient>
         </defs>
+        <rect x="32" y="32" width="448" height="448" rx="100" fill="url(#logo-gradient)"/>
+        <rect x="120" y="260" width="56" height="150" rx="28" fill="white" opacity="0.85"/>
+        <rect x="228" y="170" width="56" height="240" rx="28" fill="white" opacity="0.95"/>
+        <rect x="336" y="100" width="56" height="310" rx="28" fill="white"/>
       </svg>
       {showText && (
         <span className="text-xl font-semibold tracking-tight">ThemeMetrics</span>
@@ -40,24 +37,21 @@ export function LogoIcon({ size = 32, className = '' }: { size?: number; classNa
     <svg 
       width={size} 
       height={size} 
-      viewBox="0 0 64 64" 
+      viewBox="0 0 512 512" 
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
     >
-      <rect width="64" height="64" rx="16" fill="url(#logo-icon-gradient)"/>
-      <path 
-        d="M18 44V34M26 44V26M34 44V20M42 44V14" 
-        stroke="white" 
-        strokeWidth="6" 
-        strokeLinecap="round"
-      />
       <defs>
-        <linearGradient id="logo-icon-gradient" x1="0" y1="0" x2="64" y2="64">
-          <stop stopColor="#6366F1"/>
-          <stop offset="1" stopColor="#8B5CF6"/>
+        <linearGradient id="logo-icon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#6366f1"/>
+          <stop offset="100%" stopColor="#8b5cf6"/>
         </linearGradient>
       </defs>
+      <rect x="32" y="32" width="448" height="448" rx="100" fill="url(#logo-icon-gradient)"/>
+      <rect x="120" y="260" width="56" height="150" rx="28" fill="white" opacity="0.85"/>
+      <rect x="228" y="170" width="56" height="240" rx="28" fill="white" opacity="0.95"/>
+      <rect x="336" y="100" width="56" height="310" rx="28" fill="white"/>
     </svg>
   );
 }
