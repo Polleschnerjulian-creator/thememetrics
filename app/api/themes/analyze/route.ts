@@ -12,6 +12,9 @@ import { calculateThemeMetricsScore, CoreWebVitals, SectionAnalysisData, ThemeDa
 import { checkApiRateLimit, checkDailyAnalysisLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { isValidShopDomain, sanitizeShopDomain } from '@/lib/security';
 import { captureError, captureMessage, measureAsync, setUserContext } from '@/lib/monitoring';
+import { sendEmail } from '@/lib/email/resend';
+import { analysisCompleteEmail } from '@/lib/email/templates';
+import { emailSubscriptions } from '@/lib/db/schema';
 
 // Get current month in format '2026-01'
 function getCurrentMonth(): string {
@@ -339,6 +342,38 @@ async function runAnalysis(shop?: string) {
 
   // Update theme analyzedAt
   await db.update(schema.themes).set({ analyzedAt: new Date() }).where(eq(schema.themes.id, theme.id));
+
+  // Send analysis complete email (async, don't block response)
+  (async () => {
+    try {
+      const [subscription] = await db
+        .select()
+        .from(emailSubscriptions)
+        .where(eq(emailSubscriptions.storeId, store.id));
+
+      if (subscription && subscription.status === 'active') {
+        const storeName = store.shopDomain.replace('.myshopify.com', '');
+        const criticalCount = sectionsWithRecs.filter(s => s.performanceScore < 50).length;
+        const dashboardUrl = `https://thememetrics.de/dashboard?shop=${store.shopDomain}`;
+
+        const html = analysisCompleteEmail({
+          storeName,
+          themeName: mainTheme.name,
+          score: scoreBreakdown.overall,
+          criticalCount,
+          dashboardUrl,
+        });
+
+        await sendEmail({
+          to: subscription.email,
+          subject: `Analyse fertig: Score ${scoreBreakdown.overall} für ${mainTheme.name} 📊`,
+          html,
+        });
+      }
+    } catch (emailError) {
+      console.error('Failed to send analysis complete email:', emailError);
+    }
+  })();
 
   // Limit data based on plan
   let responseSections = sectionsWithRecs.map(s => ({

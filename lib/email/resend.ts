@@ -28,7 +28,7 @@ export async function sendEmail({
       subject,
       html,
       text,
-      replyTo,
+      replyTo: replyTo,
     });
 
     return { success: true, id: result.data?.id };

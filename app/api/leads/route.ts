@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
+import { scheduleLeadNurtureSequence } from '@/lib/email/service';
+import { sendEmail } from '@/lib/email/resend';
 
 // PageSpeed Insights API (kostenlos, kein API Key nötig für basic usage)
 const PAGESPEED_API = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
@@ -258,7 +260,7 @@ export async function POST(request: NextRequest) {
           })
           .where(eq(schema.emailLeads.id, existingLead.id));
       } else {
-        await db.insert(schema.emailLeads).values({
+        const [newLead] = await db.insert(schema.emailLeads).values({
           email: email.toLowerCase().trim(),
           shopUrl: shopUrl.trim(),
           source: 'speed-check',
@@ -267,7 +269,16 @@ export async function POST(request: NextRequest) {
           utm_source,
           utm_medium,
           utm_campaign,
-        });
+        }).returning();
+
+        // Schedule lead nurture sequence for new leads
+        if (newLead) {
+          try {
+            await scheduleLeadNurtureSequence(newLead.id, newLead.email);
+          } catch (nurturError) {
+            console.error('Failed to schedule nurture sequence:', nurturError);
+          }
+        }
       }
     } catch (dbError) {
       console.error('DB insert/update error:', dbError);
