@@ -21,6 +21,6 @@ redirect_urls = [
 ]
 
 [webhooks.privacy_compliance]
-customer_data_request_url = "https://thememetrics.de/api/webhooks/gdpr/customers-data-request"
-customer_deletion_url = "https://thememetrics.de/api/webhooks/gdpr/customers-redact"
-shop_deletion_url = "https://thememetrics.de/api/webhooks/gdpr/shop-redact"
+customer_data_request_url = "https://www.thememetrics.de/api/webhooks/gdpr/customers-data-request"
+customer_deletion_url = "https://www.thememetrics.de/api/webhooks/gdpr/customers-redact"
+shop_deletion_url = "https://www.thememetrics.de/api/webhooks/gdpr/shop-redact"
