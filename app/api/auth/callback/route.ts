@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const state = searchParams.get('state');
   const shop = searchParams.get('shop');
+  const hostFromQuery = searchParams.get('host'); // Get host parameter for embedded apps
   
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   
@@ -28,6 +29,8 @@ export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
   const storedState = cookieStore.get('shopify_oauth_state')?.value;
   const storedShop = cookieStore.get('shopify_shop')?.value;
+  const storedHost = cookieStore.get('shopify_host')?.value; // Get stored host
+  const host = hostFromQuery || storedHost; // Prefer query param, fallback to cookie
   
   if (!storedState || state !== storedState) {
     return NextResponse.redirect(`${appUrl}/?error=invalid_state`);
@@ -110,6 +113,7 @@ export async function GET(request: NextRequest) {
     
     cookieStore.delete('shopify_oauth_state');
     cookieStore.delete('shopify_shop');
+    cookieStore.delete('shopify_host'); // Clean up host cookie
     cookieStore.set('shop_session', shop, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -118,7 +122,17 @@ export async function GET(request: NextRequest) {
       path: '/',
     });
     
-    return NextResponse.redirect(`${appUrl}/dashboard?shop=${shop}&installed=${isNewInstall}`);
+    // Build redirect URL with host parameter for embedded apps
+    const redirectParams = new URLSearchParams();
+    redirectParams.set('shop', shop);
+    if (host) {
+      redirectParams.set('host', host);
+    }
+    if (isNewInstall) {
+      redirectParams.set('installed', 'true');
+    }
+    
+    return NextResponse.redirect(`${appUrl}/dashboard?${redirectParams.toString()}`);
   } catch (error) {
     console.error('OAuth callback error:', error);
     return NextResponse.redirect(`${appUrl}/?error=auth_failed`);

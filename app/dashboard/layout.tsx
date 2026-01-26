@@ -41,14 +41,17 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { shop } = useShop();
+  const host = searchParams.get('host'); // Get host for embedded apps
   
-  // Build href with shop param preserved
+  // Build href with shop AND host params preserved (important for embedded apps)
   const getHref = (baseHref: string) => {
-    if (shop) {
-      return `${baseHref}?shop=${shop}`;
-    }
-    return baseHref;
+    const params = new URLSearchParams();
+    if (shop) params.set('shop', shop);
+    if (host) params.set('host', host);
+    const queryString = params.toString();
+    return queryString ? `${baseHref}?${queryString}` : baseHref;
   };
 
   return (
