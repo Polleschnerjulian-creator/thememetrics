@@ -1,0 +1,26 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "0a4d5dc49c334431c7e3cab368c0c4d6"
+name = "ThemeMetrics"
+application_url = "https://thememetrics.de/dashboard"
+embedded = true
+
+[webhooks]
+api_version = "2026-01"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_orders,read_products,read_themes"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://thememetrics.de/api/auth/callback",
+  "https://www.thememetrics.de/api/auth/callback"
+]
+
+[webhooks.privacy_compliance]
+customer_data_request_url = "https://thememetrics.de/api/webhooks/gdpr/customers-data-request"
+customer_deletion_url = "https://thememetrics.de/api/webhooks/gdpr/customers-redact"
+shop_deletion_url = "https://thememetrics.de/api/webhooks/gdpr/shop-redact"
