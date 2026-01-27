@@ -2,7 +2,6 @@
 
 import { useSearchParams } from 'next/navigation';
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import Script from 'next/script';
 
 interface AppBridgeContextType {
   isEmbedded: boolean;
@@ -24,32 +23,84 @@ interface AppBridgeProviderProps {
 
 export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
   const searchParams = useSearchParams();
-  const host = searchParams.get('host');
   const shop = searchParams.get('shop');
-  const [appBridgeReady, setAppBridgeReady] = useState(false);
+  const host = searchParams.get('host');
   const [isEmbedded, setIsEmbedded] = useState(false);
+  const [appBridgeReady, setAppBridgeReady] = useState(false);
 
   useEffect(() => {
-    // Check if we're running inside Shopify Admin (embedded)
-    const embedded = typeof window !== 'undefined' && (window !== window.parent || Boolean(host));
-    setIsEmbedded(embedded);
-  }, [host]);
+    // Check if we're in an iframe (embedded in Shopify Admin)
+    const inIframe = typeof window !== 'undefined' && window !== window.parent;
+    setIsEmbedded(inIframe);
+    
+    if (!inIframe) {
+      console.log('Not in iframe, skipping App Bridge initialization');
+      return;
+    }
+
+    // Load App Bridge from Shopify CDN
+    const loadAppBridge = () => {
+      // Check if already loaded
+      if ((window as any).shopify?.idToken) {
+        console.log('App Bridge already available');
+        setAppBridgeReady(true);
+        return;
+      }
+
+      // Create script element
+      const script = document.createElement('script');
+      script.src = 'https://cdn.shopify.com/shopifycloud/app-bridge.js';
+      script.async = true;
+      
+      script.onload = () => {
+        console.log('App Bridge script loaded from CDN');
+        
+        // Wait a bit for initialization
+        const checkReady = setInterval(() => {
+          if ((window as any).shopify?.idToken) {
+            console.log('App Bridge ready - window.shopify.idToken available');
+            setAppBridgeReady(true);
+            clearInterval(checkReady);
+          }
+        }, 100);
+        
+        // Timeout after 5 seconds
+        setTimeout(() => {
+          clearInterval(checkReady);
+          if (!(window as any).shopify?.idToken) {
+            console.error('App Bridge loaded but idToken not available after 5s');
+          }
+        }, 5000);
+      };
+      
+      script.onerror = () => {
+        console.error('Failed to load App Bridge from CDN');
+      };
+      
+      document.head.appendChild(script);
+    };
+
+    loadAppBridge();
+  }, []);
 
   // Get session token from App Bridge
   const getSessionToken = useCallback(async (): Promise<string | null> => {
     if (typeof window === 'undefined') return null;
     
-    const shopifyGlobal = (window as unknown as { shopify?: { idToken: () => Promise<string> } }).shopify;
+    const shopifyGlobal = (window as any).shopify;
     
     if (shopifyGlobal && typeof shopifyGlobal.idToken === 'function') {
       try {
         const token = await shopifyGlobal.idToken();
+        console.log('Session token retrieved successfully');
         return token;
       } catch (error) {
         console.error('Failed to get session token:', error);
         return null;
       }
     }
+    
+    console.log('window.shopify.idToken not available');
     return null;
   }, []);
 
@@ -60,6 +111,9 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
     const headers = new Headers(options.headers);
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
+      console.log('Adding Authorization header to request');
+    } else {
+      console.log('No session token available for request');
     }
     if (shop) {
       headers.set('X-Shop-Domain', shop);
@@ -77,41 +131,6 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
     authenticatedFetch,
   };
 
-  // If we have a host parameter, we're embedded in Shopify Admin
-  // Load App Bridge from Shopify CDN (required for embedded app checks)
-  if (host) {
-    return (
-      <AppBridgeContext.Provider value={contextValue}>
-        {/* Load App Bridge from Shopify CDN - REQUIRED for embedded app verification */}
-        <Script
-          src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
-          strategy="beforeInteractive"
-          onLoad={() => {
-            console.log('Shopify App Bridge loaded from CDN');
-            setAppBridgeReady(true);
-          }}
-        />
-        <Script
-          id="shopify-app-bridge-init"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              if (window.shopify && window.shopify.createApp) {
-                window.__SHOPIFY_APP_BRIDGE__ = window.shopify.createApp({
-                  apiKey: '${process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || ''}',
-                  host: '${host}',
-                });
-                console.log('Shopify App Bridge initialized');
-              }
-            `,
-          }}
-        />
-        {children}
-      </AppBridgeContext.Provider>
-    );
-  }
-
-  // Not embedded - render children directly
   return (
     <AppBridgeContext.Provider value={contextValue}>
       {children}
