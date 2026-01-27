@@ -3,6 +3,9 @@
 import { useSearchParams } from 'next/navigation';
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
+// Base URL for API requests - must be absolute for embedded apps
+const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.thememetrics.de';
+
 interface AppBridgeContextType {
   isEmbedded: boolean;
   isReady: boolean;
@@ -66,6 +69,16 @@ function getShopDomain(): string | null {
   }
   
   return null;
+}
+
+// Convert relative URL to absolute
+function toAbsoluteUrl(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  // Remove leading slash if present
+  const path = url.startsWith('/') ? url : `/${url}`;
+  return `${API_BASE_URL}${path}`;
 }
 
 export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
@@ -143,9 +156,11 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
     return null;
   }, []);
 
-  // Authenticated fetch that includes session token
+  // Authenticated fetch that includes session token and uses absolute URLs
   const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
-    console.log('authenticatedFetch called:', url);
+    // Convert to absolute URL for embedded apps
+    const absoluteUrl = toAbsoluteUrl(url);
+    console.log('authenticatedFetch:', absoluteUrl);
     
     const token = await getSessionToken();
     
@@ -161,7 +176,7 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
       headers.set('X-Shop-Domain', currentShop);
     }
     
-    return fetch(url, {
+    return fetch(absoluteUrl, {
       ...options,
       headers,
     });
