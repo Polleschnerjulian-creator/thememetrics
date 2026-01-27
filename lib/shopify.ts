@@ -1,11 +1,13 @@
 import { shopifyApi, LATEST_API_VERSION, Session } from '@shopify/shopify-api';
 import '@shopify/shopify-api/adapters/node';
 
-// Validate required environment variables
-const requiredEnvVars = ['SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'NEXT_PUBLIC_APP_URL'];
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    console.warn(`Warning: ${envVar} is not set`);
+// Validate required environment variables (server-side only)
+if (typeof window === 'undefined') {
+  const requiredEnvVars = ['SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'NEXT_PUBLIC_APP_URL'];
+  for (const envVar of requiredEnvVars) {
+    if (!process.env[envVar]) {
+      console.warn(`Warning: ${envVar} is not set`);
+    }
   }
 }
 
