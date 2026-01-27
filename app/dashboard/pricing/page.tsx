@@ -118,6 +118,7 @@ export default function PricingPage() {
   const [usage, setUsage] = useState<any>(null);
   const [loadingPlan, setLoadingPlan] = useState(true);
   const { shop, isLoading: shopLoading } = useShop();
+  const { authenticatedFetch } = useAppBridge();
 
   // Load current plan and usage from API
   useEffect(() => {
@@ -410,6 +411,7 @@ function PromoCodeSection({ shop, onSuccess }: { shop: string | null; onSuccess:
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const { authenticatedFetch } = useAppBridge();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

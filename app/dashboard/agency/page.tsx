@@ -521,6 +521,7 @@ function AddWorkspaceModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useLanguage();
+  const { authenticatedFetch } = useAppBridge();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -645,6 +646,7 @@ function BrandingModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useLanguage();
+  const { authenticatedFetch } = useAppBridge();
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -810,6 +812,7 @@ function BatchAnalysisModal({
   const [results, setResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const { language } = useLanguage();
+  const { authenticatedFetch } = useAppBridge();
   const isGerman = language === 'de';
 
   const startBatchAnalysis = async () => {
