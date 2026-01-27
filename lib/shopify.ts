@@ -1,25 +1,33 @@
-import { shopifyApi, LATEST_API_VERSION, Session } from '@shopify/shopify-api';
-import '@shopify/shopify-api/adapters/node';
+// Shopify API version - hardcoded to avoid importing @shopify/shopify-api on client
+const SHOPIFY_API_VERSION = '2024-10';
 
-// Validate required environment variables (server-side only)
-if (typeof window === 'undefined') {
-  const requiredEnvVars = ['SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'NEXT_PUBLIC_APP_URL'];
-  for (const envVar of requiredEnvVars) {
-    if (!process.env[envVar]) {
-      console.warn(`Warning: ${envVar} is not set`);
-    }
+// Only import and initialize on server side
+let shopify: any = null;
+
+// Server-side only initialization
+function getShopifyInstance() {
+  if (typeof window !== 'undefined') {
+    throw new Error('Shopify API can only be used on the server');
   }
+  
+  if (!shopify) {
+    const { shopifyApi, LATEST_API_VERSION } = require('@shopify/shopify-api');
+    require('@shopify/shopify-api/adapters/node');
+    
+    shopify = shopifyApi({
+      apiKey: process.env.SHOPIFY_API_KEY || '',
+      apiSecretKey: process.env.SHOPIFY_API_SECRET || '',
+      scopes: (process.env.SHOPIFY_SCOPES || 'read_themes,read_products').split(','),
+      hostName: (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/https?:\/\//, ''),
+      apiVersion: LATEST_API_VERSION,
+      isEmbeddedApp: false,
+    });
+  }
+  
+  return shopify;
 }
 
-// Initialize Shopify API
-export const shopify = shopifyApi({
-  apiKey: process.env.SHOPIFY_API_KEY || '',
-  apiSecretKey: process.env.SHOPIFY_API_SECRET || '',
-  scopes: (process.env.SHOPIFY_SCOPES || 'read_themes,read_products').split(','),
-  hostName: (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/https?:\/\//, ''),
-  apiVersion: LATEST_API_VERSION,
-  isEmbeddedApp: false, // Set to true if you want embedded app
-});
+export { getShopifyInstance as shopify };
 
 // Generate OAuth authorization URL
 export function generateAuthUrl(shop: string, redirectUri: string, state: string): string {
@@ -69,7 +77,7 @@ export async function exchangeCodeForToken(
 export function createShopifyClient(shop: string, accessToken: string) {
   return {
     async get<T>(path: string): Promise<T> {
-      const response = await fetch(`https://${shop}/admin/api/${LATEST_API_VERSION}${path}`, {
+      const response = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}${path}`, {
         headers: {
           'X-Shopify-Access-Token': accessToken,
           'Content-Type': 'application/json',
@@ -85,7 +93,7 @@ export function createShopifyClient(shop: string, accessToken: string) {
     },
 
     async post<T>(path: string, body: unknown): Promise<T> {
-      const response = await fetch(`https://${shop}/admin/api/${LATEST_API_VERSION}${path}`, {
+      const response = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}${path}`, {
         method: 'POST',
         headers: {
           'X-Shopify-Access-Token': accessToken,
@@ -106,6 +114,7 @@ export function createShopifyClient(shop: string, accessToken: string) {
 
 // Verify Shopify webhook HMAC
 export function verifyWebhook(body: string, hmac: string): boolean {
+  if (typeof window !== 'undefined') return false;
   const crypto = require('crypto');
   const secret = process.env.SHOPIFY_API_SECRET || '';
   const generatedHmac = crypto
@@ -127,6 +136,7 @@ export function isValidShopDomain(shop: string): boolean {
 
 // Generate random state for OAuth
 export function generateState(): string {
+  if (typeof window !== 'undefined') return '';
   const crypto = require('crypto');
   return crypto.randomBytes(16).toString('hex');
 }
