@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { PLANS, PlanId, canPerformAction } from '@/lib/billing';
+import { authenticateRequest } from '@/lib/auth';
 
 interface PageSpeedResponse {
   lighthouseResult: {
@@ -83,6 +84,49 @@ async function checkAndUpdateUsage(storeId: number, planId: PlanId, isDesktop: b
     .where(eq(schema.usageTracking.id, usage.id));
 
   return { allowed: true };
+}
+
+// GET - Return latest performance data (for dashboard)
+export async function GET(request: NextRequest) {
+  try {
+    // Authenticate using session token or cookie fallback
+    const authResult = await authenticateRequest(request);
+    
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+    
+    const { store } = authResult;
+    
+    // Get latest theme analysis which contains performance data
+    const latestAnalysis = await db.query.themeAnalyses.findFirst({
+      where: eq(schema.themeAnalyses.storeId, store.id),
+      orderBy: [desc(schema.themeAnalyses.analyzedAt)],
+    });
+    
+    if (!latestAnalysis || !latestAnalysis.lcpMs) {
+      return NextResponse.json({ 
+        hasData: false,
+        message: 'No performance data available. Run a theme analysis first.'
+      });
+    }
+    
+    // Return cached performance data from theme analysis
+    return NextResponse.json({
+      hasData: true,
+      mobile: {
+        performance: latestAnalysis.overallScore,
+        lcp: latestAnalysis.lcpMs,
+        cls: parseFloat(latestAnalysis.clsScore as string) || 0,
+        tbt: latestAnalysis.tbtMs,
+        fcp: latestAnalysis.fcpMs,
+      },
+      analyzedAt: latestAnalysis.analyzedAt,
+    });
+  } catch (error) {
+    console.error('Performance GET error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {

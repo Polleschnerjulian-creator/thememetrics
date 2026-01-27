@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
 
 function getShopFromUrl(): string {
   if (typeof window === 'undefined') return '';
@@ -52,42 +53,44 @@ export function useShop(fallback: string = '') {
 }
 
 export function useAnalysisData(shop: string) {
+  const { authenticatedFetch } = useAppBridge();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!shop) return;
-      
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const response = await fetch(`/api/themes/data?shop=${shop}`);
-        if (response.ok) {
-          const result = await response.json();
-          if (result.hasData) {
-            setData(result);
-          }
-        } else {
-          setError('Failed to load data');
-        }
-      } catch (err) {
-        setError('Network error');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchData = useCallback(async () => {
+    if (!shop) return;
     
-    if (shop) fetchData();
-  }, [shop]);
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await authenticatedFetch(`/api/themes/data?shop=${shop}`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.hasData) {
+          setData(result);
+        }
+      } else {
+        setError('Failed to load data');
+      }
+    } catch (err) {
+      setError('Network error');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [shop, authenticatedFetch]);
 
-  return { data, loading, error, refetch: () => setLoading(true) };
+  useEffect(() => {
+    if (shop) fetchData();
+  }, [shop, fetchData]);
+
+  return { data, loading, error, refetch: fetchData };
 }
 
 export function useHistoryData(shop: string) {
+  const { authenticatedFetch } = useAppBridge();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -96,7 +99,7 @@ export function useHistoryData(shop: string) {
       if (!shop) return;
       
       try {
-        const response = await fetch(`/api/themes/history?shop=${shop}`);
+        const response = await authenticatedFetch(`/api/themes/history?shop=${shop}`);
         if (response.ok) {
           const result = await response.json();
           setData(result);
@@ -109,7 +112,7 @@ export function useHistoryData(shop: string) {
     };
     
     if (shop) fetchHistory();
-  }, [shop]);
+  }, [shop, authenticatedFetch]);
 
   return { data, loading };
 }

@@ -2,7 +2,7 @@
 # https://shopify.dev/docs/apps/tools/cli/configuration
 
 name = "ThemeMetrics"
-client_id = "8a4d5dc49c334431c7e3cab368c0c4d6"
+client_id = "0a4d5dc49c334431c7e3cab368c0c4d6"
 application_url = "https://thememetrics.de/dashboard"
 embedded = true
 

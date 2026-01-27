@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { db, schema } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
 import { createShopifyClient } from '@/lib/shopify';
@@ -15,6 +14,7 @@ import { captureError, captureMessage, measureAsync, setUserContext } from '@/li
 import { sendEmail } from '@/lib/email/resend';
 import { analysisCompleteEmail } from '@/lib/email/templates';
 import { emailSubscriptions } from '@/lib/db/schema';
+import { authenticateRequest, authErrorResponse } from '@/lib/auth';
 
 // Get current month in format '2026-01'
 function getCurrentMonth(): string {
@@ -135,32 +135,20 @@ async function hasTranslations(client: any, themeId: string): Promise<boolean> {
   }
 }
 
-async function runAnalysis(shop?: string) {
-  const cookieStore = await cookies();
-  const shopSession = shop || cookieStore.get('shop_session')?.value;
-
-  // Validate shop domain
-  if (!shopSession || !isValidShopDomain(shopSession)) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+async function runAnalysis(request: NextRequest, bodyShop?: string) {
+  // Authenticate request using session token or cookie fallback
+  const authResult = await authenticateRequest(request);
+  
+  if (!authResult.success) {
+    return authErrorResponse(authResult);
   }
-
-  const sanitizedShop = sanitizeShopDomain(shopSession);
-  if (!sanitizedShop) {
-    return NextResponse.json({ error: 'Invalid shop domain' }, { status: 400 });
-  }
+  
+  const { shop: sanitizedShop, store } = authResult;
 
   // Check API rate limit (per minute)
   const apiLimit = checkApiRateLimit(sanitizedShop, 'free');
   if (!apiLimit.allowed) {
     return rateLimitResponse(apiLimit.resetIn);
-  }
-
-  const store = await db.query.stores.findFirst({
-    where: eq(schema.stores.shopDomain, sanitizedShop),
-  });
-
-  if (!store) {
-    return NextResponse.json({ error: 'Store not found' }, { status: 404 });
   }
 
   // Set user context for error tracking
@@ -439,7 +427,7 @@ async function runAnalysis(shop?: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    return await measureAsync('analyze-theme-get', () => runAnalysis());
+    return await measureAsync('analyze-theme-get', () => runAnalysis(request));
   } catch (error) {
     captureError(error as Error, { tags: { route: 'themes/analyze', method: 'GET' } });
     return NextResponse.json({ error: 'Failed to analyze theme' }, { status: 500 });
@@ -455,7 +443,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid shop domain' }, { status: 400 });
     }
     
-    return await measureAsync('analyze-theme-post', () => runAnalysis(body.shop));
+    return await measureAsync('analyze-theme-post', () => runAnalysis(request, body.shop));
   } catch (error) {
     captureError(error as Error, { tags: { route: 'themes/analyze', method: 'POST' } });
     return NextResponse.json({ error: 'Failed to analyze theme' }, { status: 500 });

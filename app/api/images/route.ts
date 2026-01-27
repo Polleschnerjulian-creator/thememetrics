@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { db, schema } from '@/lib/db';
 import { eq, desc } from 'drizzle-orm';
 import { createShopifyClient } from '@/lib/shopify';
@@ -10,33 +9,21 @@ import {
   generateImageReport,
   SectionImageAnalysis,
 } from '@/lib/image-optimizer';
-import { isValidShopDomain, sanitizeShopDomain } from '@/lib/security';
 import { captureError, measureAsync } from '@/lib/monitoring';
+import { authenticateRequest, authErrorResponse } from '@/lib/auth';
 
 // Cache duration: 1 hour
 const CACHE_DURATION_MS = 60 * 60 * 1000;
 
-async function getOrCreateImageAnalysis(shop: string, forceRefresh: boolean = false): Promise<NextResponse> {
-  const cookieStore = await cookies();
-  const shopSession = shop || cookieStore.get('shop_session')?.value;
-
-  // Validate shop domain
-  if (!shopSession || !isValidShopDomain(shopSession)) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+async function getOrCreateImageAnalysis(request: NextRequest, forceRefresh: boolean = false): Promise<NextResponse> {
+  // Authenticate using session token or cookie fallback
+  const authResult = await authenticateRequest(request);
+  
+  if (!authResult.success) {
+    return authErrorResponse(authResult);
   }
-
-  const sanitizedShop = sanitizeShopDomain(shopSession);
-  if (!sanitizedShop) {
-    return NextResponse.json({ error: 'Invalid shop domain' }, { status: 400 });
-  }
-
-  const store = await db.query.stores.findFirst({
-    where: eq(schema.stores.shopDomain, sanitizedShop),
-  });
-
-  if (!store) {
-    return NextResponse.json({ error: 'Store not found' }, { status: 404 });
-  }
+  
+  const { store } = authResult;
 
   // Check for cached analysis (unless force refresh)
   if (!forceRefresh) {
@@ -61,7 +48,6 @@ async function getOrCreateImageAnalysis(shop: string, forceRefresh: boolean = fa
         }
       }
     } catch (err) {
-      // Table might not exist yet, continue with fresh analysis
       console.log('Image analysis cache not available, running fresh analysis');
     }
   }
@@ -69,7 +55,6 @@ async function getOrCreateImageAnalysis(shop: string, forceRefresh: boolean = fa
   // Run fresh analysis
   const client = createShopifyClient(store.shopDomain, store.accessToken);
 
-  // Get active theme
   const { themes } = await client.get<any>('/themes.json');
   const activeTheme = themes.find((t: any) => t.role === 'main');
 
@@ -77,14 +62,12 @@ async function getOrCreateImageAnalysis(shop: string, forceRefresh: boolean = fa
     return NextResponse.json({ error: 'No active theme found' }, { status: 404 });
   }
 
-  // Get all section files - sort alphabetically for consistent results
   const { assets } = await client.get<any>(`/themes/${activeTheme.id}/assets.json`);
   const sectionFiles = assets
     .filter((a: any) => a.key.startsWith('sections/') && a.key.endsWith('.liquid'))
     .sort((a: any, b: any) => a.key.localeCompare(b.key))
     .slice(0, 30);
 
-  // Helper function to fetch with retry
   async function fetchWithRetry(key: string, retries = 2): Promise<string | null> {
     for (let i = 0; i <= retries; i++) {
       try {
@@ -100,7 +83,6 @@ async function getOrCreateImageAnalysis(shop: string, forceRefresh: boolean = fa
     return null;
   }
 
-  // Analyze each section
   const sectionResults: SectionImageAnalysis[] = [];
 
   for (const file of sectionFiles) {
@@ -113,7 +95,6 @@ async function getOrCreateImageAnalysis(shop: string, forceRefresh: boolean = fa
     await new Promise(resolve => setTimeout(resolve, 50));
   }
 
-  // Also check snippets for image-related code
   const snippetFiles = assets
     .filter((a: any) => a.key.startsWith('snippets/') && a.key.endsWith('.liquid'))
     .filter((a: any) => 
@@ -137,11 +118,9 @@ async function getOrCreateImageAnalysis(shop: string, forceRefresh: boolean = fa
     await new Promise(resolve => setTimeout(resolve, 50));
   }
 
-  // Generate report
   const report = generateImageReport(sectionResults);
   const now = new Date();
 
-  // Save to database
   try {
     await db.insert(schema.imageAnalyses).values({
       storeId: store.id,
@@ -162,7 +141,6 @@ async function getOrCreateImageAnalysis(shop: string, forceRefresh: boolean = fa
     });
   } catch (err) {
     console.error('Failed to save image analysis:', err);
-    // Continue anyway - we still have the report
   }
 
   return NextResponse.json({
@@ -179,11 +157,10 @@ async function getOrCreateImageAnalysis(shop: string, forceRefresh: boolean = fa
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const shop = searchParams.get('shop') || undefined;
     const refresh = searchParams.get('refresh') === 'true';
     
     return await measureAsync('image-analysis', () => 
-      getOrCreateImageAnalysis(shop || '', refresh)
+      getOrCreateImageAnalysis(request, refresh)
     );
   } catch (error) {
     captureError(error as Error, { tags: { route: 'images', method: 'GET' } });
@@ -193,14 +170,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    
-    if (body.shop && !isValidShopDomain(body.shop)) {
-      return NextResponse.json({ error: 'Invalid shop domain' }, { status: 400 });
-    }
-    
     return await measureAsync('image-analysis-post', () => 
-      getOrCreateImageAnalysis(body.shop || '', true)
+      getOrCreateImageAnalysis(request, true)
     );
   } catch (error) {
     captureError(error as Error, { tags: { route: 'images', method: 'POST' } });

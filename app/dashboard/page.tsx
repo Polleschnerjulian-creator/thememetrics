@@ -13,6 +13,7 @@ import { ValidationBanner } from '@/components/dashboard/ValidationBanner';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { LogoIcon } from '@/components/ui/logo';
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
 import { 
   AlertTriangle, 
   CheckCircle, 
@@ -108,6 +109,7 @@ function getShopFromUrl(): string {
 
 function DashboardContent() {
   const searchParams = useSearchParams();
+  const { authenticatedFetch } = useAppBridge();
   const [shop, setShop] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -160,7 +162,7 @@ function DashboardContent() {
       
       try {
         // Fetch current analysis
-        const analysisRes = await fetch(`/api/themes/data?shop=${shop}`);
+        const analysisRes = await authenticatedFetch(`/api/themes/data?shop=${shop}`);
         if (analysisRes.ok) {
           const data = await analysisRes.json();
           if (data.hasData) {
@@ -176,7 +178,7 @@ function DashboardContent() {
         }
 
         // Fetch history
-        const historyRes = await fetch(`/api/themes/history?shop=${shop}`);
+        const historyRes = await authenticatedFetch(`/api/themes/history?shop=${shop}`);
         if (historyRes.ok) {
           const data = await historyRes.json();
           setHistoryData(data);
@@ -189,7 +191,7 @@ function DashboardContent() {
         // Fetch accessibility if not cached
         if (!localStorage.getItem(`tm_accessibility_${shop}`)) {
           try {
-            const accessRes = await fetch(`/api/accessibility?shop=${shop}`);
+            const accessRes = await authenticatedFetch(`/api/accessibility?shop=${shop}`);
             if (accessRes.ok) {
               const accessData = await accessRes.json();
               const score = accessData.report?.score ?? null;
@@ -217,7 +219,7 @@ function DashboardContent() {
         // Fetch images if not cached
         if (!localStorage.getItem(`tm_images_${shop}`)) {
           try {
-            const imageRes = await fetch(`/api/images?shop=${shop}`);
+            const imageRes = await authenticatedFetch(`/api/images?shop=${shop}`);
             if (imageRes.ok) {
               const imageData = await imageRes.json();
               const score = imageData.report?.score ?? null;
@@ -245,7 +247,7 @@ function DashboardContent() {
         // Fetch performance if not cached
         if (!localStorage.getItem(`tm_performance_${shop}`)) {
           try {
-            const perfRes = await fetch(`/api/performance?shop=${shop}`);
+            const perfRes = await authenticatedFetch(`/api/performance?shop=${shop}`);
             if (perfRes.ok) {
               const perfData = await perfRes.json();
               if (perfData.mobile?.performance !== undefined) {
@@ -283,14 +285,14 @@ function DashboardContent() {
     };
     
     if (shop) loadData();
-  }, [shop]);
+  }, [shop, authenticatedFetch]);
 
   const runAnalysis = async () => {
     setIsAnalyzing(true);
     setError(null);
 
     try {
-      const response = await fetch('/api/themes/analyze', {
+      const response = await authenticatedFetch('/api/themes/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shop }),
@@ -308,7 +310,7 @@ function DashboardContent() {
       setCompletedSteps(prev => [...prev.filter(s => s !== 'analyze'), 'analyze']);
 
       // Refresh history
-      const historyRes = await fetch(`/api/themes/history?shop=${shop}`);
+      const historyRes = await authenticatedFetch(`/api/themes/history?shop=${shop}`);
       if (historyRes.ok) {
         setHistoryData(await historyRes.json());
       }
