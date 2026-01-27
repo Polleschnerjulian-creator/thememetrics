@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
+
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { 
@@ -179,6 +181,7 @@ const MetricCard = ({
 
 export default function PerformancePage() {
   const searchParams = useSearchParams();
+  const { authenticatedFetch } = useAppBridge();
   const [shop, setShop] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -244,7 +247,7 @@ export default function PerformancePage() {
     setHasRunOnce(true);
 
     try {
-      const response = await fetch('/api/performance', {
+      const response = await authenticatedFetch('/api/performance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: targetUrl, strategy, shop }),

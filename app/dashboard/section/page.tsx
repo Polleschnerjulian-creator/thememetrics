@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
+
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -212,6 +214,7 @@ function getShopFromUrl(): string {
 
 function SectionDetailContent() {
   const searchParams = useSearchParams();
+  const { authenticatedFetch } = useAppBridge();
   const sectionName = searchParams.get('section') || '';
   const [shop, setShop] = useState('');
   const [section, setSection] = useState<SectionDetail | null>(null);
@@ -229,7 +232,7 @@ function SectionDetailContent() {
       if (!shop || !sectionName) return;
       
       try {
-        const response = await fetch(`/api/themes/data?shop=${shop}`);
+        const response = await authenticatedFetch(`/api/themes/data?shop=${shop}`);
         if (response.ok) {
           const data = await response.json();
           if (data.hasData && data.analysis?.sections) {

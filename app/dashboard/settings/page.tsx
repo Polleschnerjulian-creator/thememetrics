@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
+
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -26,6 +28,7 @@ interface EmailPreferences {
 
 function SettingsContent() {
   const searchParams = useSearchParams();
+  const { authenticatedFetch } = useAppBridge();
   const shop = searchParams.get('shop') || '';
   const { language } = useLanguage();
   
@@ -47,7 +50,7 @@ function SettingsContent() {
     
     const loadPreferences = async () => {
       try {
-        const response = await fetch(`/api/emails/preferences?shop=${shop}`);
+        const response = await authenticatedFetch(`/api/emails/preferences?shop=${shop}`);
         if (response.ok) {
           const data = await response.json();
           setPreferences(data.preferences);
@@ -73,7 +76,7 @@ function SettingsContent() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const response = await fetch('/api/emails/preferences', {
+      const response = await authenticatedFetch('/api/emails/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

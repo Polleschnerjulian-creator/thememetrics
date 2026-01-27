@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
+
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -368,6 +370,7 @@ function getShopFromUrl(): string {
 
 function AccessibilityContent() {
   const searchParams = useSearchParams();
+  const { authenticatedFetch } = useAppBridge();
   const [shop, setShop] = useState('');
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -405,7 +408,7 @@ function AccessibilityContent() {
   const fetchAccessibility = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/accessibility?shop=${shop}`);
+      const response = await authenticatedFetch(`/api/accessibility?shop=${shop}`);
       if (response.ok) {
         const data = await response.json();
         setReport(data.report);
@@ -431,7 +434,7 @@ function AccessibilityContent() {
   const runAnalysis = async () => {
     setAnalyzing(true);
     try {
-      const response = await fetch('/api/accessibility', {
+      const response = await authenticatedFetch('/api/accessibility', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shop }),

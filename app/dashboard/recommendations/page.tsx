@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
+
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -577,6 +579,7 @@ function CodeBlock({ code, label }: { code: string; label?: string }) {
 
 function RecommendationsContent() {
   const searchParams = useSearchParams();
+  const { authenticatedFetch } = useAppBridge();
   const [shop, setShop] = useState('');
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -599,7 +602,7 @@ function RecommendationsContent() {
     if (!shop) return;
     const fetchData = async () => {
       try {
-        const response = await fetch(`/api/themes/data?shop=${shop}`);
+        const response = await authenticatedFetch(`/api/themes/data?shop=${shop}`);
         if (response.ok) {
           const result = await response.json();
           if (result.hasData) setData(result);

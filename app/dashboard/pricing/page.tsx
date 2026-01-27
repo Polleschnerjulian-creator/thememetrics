@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
+
 import { useState, useEffect } from 'react';
 import { useShop } from '@/hooks/useShop';
 import { 
@@ -123,7 +125,7 @@ export default function PricingPage() {
       if (!shop) return;
       
       try {
-        const response = await fetch(`/api/subscription?shop=${shop}`);
+        const response = await authenticatedFetch(`/api/subscription?shop=${shop}`);
         if (response.ok) {
           const data = await response.json();
           setCurrentPlan(data.plan || 'free');
@@ -152,7 +154,7 @@ export default function PricingPage() {
     setLoading(planId);
     
     try {
-      const response = await fetch('/api/billing', {
+      const response = await authenticatedFetch('/api/billing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -418,7 +420,7 @@ function PromoCodeSection({ shop, onSuccess }: { shop: string | null; onSuccess:
     setSuccess('');
 
     try {
-      const response = await fetch('/api/promo', {
+      const response = await authenticatedFetch('/api/promo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code.trim(), shop }),

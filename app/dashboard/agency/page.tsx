@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
+
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { 
@@ -69,6 +71,7 @@ interface TeamMember {
 
 export default function AgencyDashboard() {
   const searchParams = useSearchParams();
+  const { authenticatedFetch } = useAppBridge();
   const [shop, setShop] = useState('');
   const [agency, setAgency] = useState<Agency | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -108,7 +111,7 @@ export default function AgencyDashboard() {
   const fetchAgencyData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/agency?shop=${shop}`);
+      const response = await authenticatedFetch(`/api/agency?shop=${shop}`);
       
       if (!response.ok) {
         const data = await response.json();
@@ -143,7 +146,7 @@ export default function AgencyDashboard() {
 
   const toggleClientAccess = async (workspace: Workspace) => {
     try {
-      await fetch(`/api/agency/workspaces?shop=${shop}&id=${workspace.id}`, {
+      await authenticatedFetch(`/api/agency/workspaces?shop=${shop}&id=${workspace.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientAccessEnabled: !workspace.clientAccessEnabled }),
@@ -158,7 +161,7 @@ export default function AgencyDashboard() {
     if (!confirm(`"${workspace.name}" ${t('confirmDelete')}`)) return;
     
     try {
-      await fetch(`/api/agency/workspaces?shop=${shop}&id=${workspace.id}`, {
+      await authenticatedFetch(`/api/agency/workspaces?shop=${shop}&id=${workspace.id}`, {
         method: 'DELETE',
       });
       fetchAgencyData();
@@ -525,7 +528,7 @@ function AddWorkspaceModal({
     setError(null);
 
     try {
-      const response = await fetch(`/api/agency/workspaces?shop=${shop}`, {
+      const response = await authenticatedFetch(`/api/agency/workspaces?shop=${shop}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, shopDomain, notes }),
@@ -668,7 +671,7 @@ function BrandingModal({
     setError(null);
 
     try {
-      const response = await fetch(`/api/agency?shop=${shop}`, {
+      const response = await authenticatedFetch(`/api/agency?shop=${shop}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -815,7 +818,7 @@ function BatchAnalysisModal({
     setResults(null);
 
     try {
-      const response = await fetch(`/api/agency/batch-analyze`, {
+      const response = await authenticatedFetch(`/api/agency/batch-analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });

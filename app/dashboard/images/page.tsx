@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ImagesSkeleton } from '@/components/ui/skeleton';
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
 import { 
   ArrowLeft, 
   Image as ImageIcon,
@@ -176,6 +177,7 @@ function getStepGuide(issue: ImageIssue): StepGuide {
 
 function ImageContent() {
   const searchParams = useSearchParams();
+  const { authenticatedFetch } = useAppBridge();
   const [shop, setShop] = useState('');
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -202,8 +204,8 @@ function ImageContent() {
     const fetchData = async () => {
       try {
         const [dashRes, imgRes] = await Promise.all([
-          fetch(`/api/dashboard?shop=${shop}`),
-          fetch(`/api/images?shop=${shop}`)
+          authenticatedFetch(`/api/dashboard?shop=${shop}`),
+          authenticatedFetch(`/api/images?shop=${shop}`)
         ]);
         
         if (dashRes.ok) {
@@ -237,7 +239,7 @@ function ImageContent() {
   const runAnalysis = async () => {
     setAnalyzing(true);
     try {
-      const response = await fetch(`/api/images?shop=${shop}&refresh=true`);
+      const response = await authenticatedFetch(`/api/images?shop=${shop}&refresh=true`);
       if (response.ok) {
         const data = await response.json();
         setReport(data.report);

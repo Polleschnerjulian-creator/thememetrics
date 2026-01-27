@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
+
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -44,6 +46,7 @@ function getShopFromUrl(): string {
 
 function BenchmarksContent() {
   const searchParams = useSearchParams();
+  const { authenticatedFetch } = useAppBridge();
   const [shop, setShop] = useState('');
 
   useEffect(() => {
@@ -59,7 +62,7 @@ function BenchmarksContent() {
     const fetchData = async () => {
       if (!shop) return;
       try {
-        const response = await fetch(`/api/themes/data?shop=${shop}`);
+        const response = await authenticatedFetch(`/api/themes/data?shop=${shop}`);
         if (response.ok) {
           const result = await response.json();
           if (result.hasData) setData(result);
