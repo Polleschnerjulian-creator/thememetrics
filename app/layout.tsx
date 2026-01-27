@@ -20,6 +20,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="de" suppressHydrationWarning>
+      <head>
+        {/* App Bridge MUST be the first script, without async/defer */}
+        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+      </head>
       <body className={inter.className}>
         <ThemeProvider>
           <LanguageProvider>

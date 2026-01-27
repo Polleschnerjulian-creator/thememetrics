@@ -24,7 +24,6 @@ interface AppBridgeProviderProps {
 export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
   const searchParams = useSearchParams();
   const shop = searchParams.get('shop');
-  const host = searchParams.get('host');
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [appBridgeReady, setAppBridgeReady] = useState(false);
 
@@ -33,54 +32,39 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
     const inIframe = typeof window !== 'undefined' && window !== window.parent;
     setIsEmbedded(inIframe);
     
-    if (!inIframe) {
-      console.log('Not in iframe, skipping App Bridge initialization');
-      return;
-    }
-
-    // Load App Bridge from Shopify CDN
-    const loadAppBridge = () => {
-      // Check if already loaded
-      if ((window as any).shopify?.idToken) {
-        console.log('App Bridge already available');
+    // Check if App Bridge is ready
+    const checkReady = () => {
+      const shopify = (window as any).shopify;
+      if (shopify && typeof shopify.idToken === 'function') {
+        console.log('App Bridge ready - window.shopify.idToken available');
         setAppBridgeReady(true);
-        return;
+        return true;
       }
-
-      // Create script element
-      const script = document.createElement('script');
-      script.src = 'https://cdn.shopify.com/shopifycloud/app-bridge.js';
-      script.async = true;
-      
-      script.onload = () => {
-        console.log('App Bridge script loaded from CDN');
-        
-        // Wait a bit for initialization
-        const checkReady = setInterval(() => {
-          if ((window as any).shopify?.idToken) {
-            console.log('App Bridge ready - window.shopify.idToken available');
-            setAppBridgeReady(true);
-            clearInterval(checkReady);
-          }
-        }, 100);
-        
-        // Timeout after 5 seconds
-        setTimeout(() => {
-          clearInterval(checkReady);
-          if (!(window as any).shopify?.idToken) {
-            console.error('App Bridge loaded but idToken not available after 5s');
-          }
-        }, 5000);
-      };
-      
-      script.onerror = () => {
-        console.error('Failed to load App Bridge from CDN');
-      };
-      
-      document.head.appendChild(script);
+      return false;
     };
-
-    loadAppBridge();
+    
+    // Check immediately
+    if (checkReady()) return;
+    
+    // Poll for App Bridge
+    const interval = setInterval(() => {
+      if (checkReady()) {
+        clearInterval(interval);
+      }
+    }, 100);
+    
+    // Timeout after 5 seconds
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+      if (!(window as any).shopify?.idToken) {
+        console.log('App Bridge not available after 5s');
+      }
+    }, 5000);
+    
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
   }, []);
 
   // Get session token from App Bridge
