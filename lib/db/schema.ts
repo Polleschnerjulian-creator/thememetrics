@@ -26,10 +26,9 @@ export const subscriptions = pgTable('subscriptions', {
   storeId: integer('store_id').references(() => stores.id).notNull(),
   plan: text('plan').default('starter'),
   status: text('status').default('active'),
-  // Shopify Billing
-  shopifyChargeId: text('shopify_charge_id'), // RecurringApplicationCharge ID
+  stripeCustomerId: text('stripe_customer_id'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
   currentPeriodEnd: timestamp('current_period_end'),
-  trialEndsAt: timestamp('trial_ends_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => [

@@ -122,11 +122,6 @@ export async function GET(request: NextRequest) {
     // Overall usage percent (average of limited resources)
     const overallUsagePercent = Math.max(themeAnalysesPercent, performanceTestsPercent);
 
-    // Trial information
-    const trialEndsAt = subscription?.trialEndsAt ? new Date(subscription.trialEndsAt) : null;
-    const isTrialing = trialEndsAt && trialEndsAt > new Date();
-    const trialDaysLeft = getDaysRemaining(trialEndsAt);
-
     // Billing period information
     const periodEndsAt = subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null;
     const daysLeftInPeriod = getDaysRemaining(periodEndsAt);
@@ -139,13 +134,6 @@ export async function GET(request: NextRequest) {
       planName: planDetails.name,
       status: subscription?.status || 'active',
       features: planDetails.features,
-
-      // Trial info
-      trial: isTrialing ? {
-        active: true,
-        endsAt: trialEndsAt?.toISOString(),
-        daysLeft: trialDaysLeft,
-      } : null,
 
       // Billing period
       billingPeriod: periodEndsAt ? {
