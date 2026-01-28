@@ -113,7 +113,7 @@ async function runAccessibilityCheck(request: NextRequest): Promise<NextResponse
 
 export async function GET(request: NextRequest) {
   try {
-    const response = await measureAsync('accessibility-check', () => runAccessibilityCheck(request));
+    const response = await runAccessibilityCheck(request);
     return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'accessibility', method: 'GET' } });
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const response = await measureAsync('accessibility-check-post', () => runAccessibilityCheck(request));
+    const response = await runAccessibilityCheck(request);
     return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'accessibility', method: 'POST' } });

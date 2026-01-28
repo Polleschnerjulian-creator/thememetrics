@@ -432,7 +432,7 @@ async function runAnalysis(request: NextRequest, bodyShop?: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const response = await measureAsync('analyze-theme-get', () => runAnalysis(request));
+    const response = await runAnalysis(request);
     return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'themes/analyze', method: 'GET' } });
@@ -449,7 +449,7 @@ export async function POST(request: NextRequest) {
       return withCors(NextResponse.json({ error: 'Invalid shop domain' }, { status: 400 }));
     }
     
-    const response = await measureAsync('analyze-theme-post', () => runAnalysis(request, body.shop));
+    const response = await runAnalysis(request, body.shop);
     return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'themes/analyze', method: 'POST' } });

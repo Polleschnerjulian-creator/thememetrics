@@ -164,9 +164,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const refresh = searchParams.get('refresh') === 'true';
     
-    const response = await measureAsync('image-analysis', () => 
-      getOrCreateImageAnalysis(request, refresh)
-    );
+    const response = await getOrCreateImageAnalysis(request, refresh);
     return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'images', method: 'GET' } });
@@ -176,9 +174,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const response = await measureAsync('image-analysis-post', () => 
-      getOrCreateImageAnalysis(request, true)
-    );
+    const response = await getOrCreateImageAnalysis(request, true);
     return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'images', method: 'POST' } });
