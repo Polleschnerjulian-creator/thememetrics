@@ -4,7 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, desc } from 'drizzle-orm';
 import { calculateThemeMetricsScore, SectionAnalysisData, ThemeData } from '@/lib/score';
-import { withAuth } from '@/lib/auth';
+import { withAuth, handleOptions } from '@/lib/auth';
+
+// Handle CORS preflight
+export async function OPTIONS() {
+  return handleOptions();
+}
 
 export async function GET(request: NextRequest) {
   return withAuth(request, async (shop, store) => {

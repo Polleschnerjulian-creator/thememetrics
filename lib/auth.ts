@@ -5,6 +5,36 @@ import { eq } from 'drizzle-orm';
 import { verifySessionToken, getShopFromToken, getSessionTokenFromRequest } from './session-token';
 import { isValidShopDomain, sanitizeShopDomain } from './security';
 
+/**
+ * CORS headers for embedded Shopify apps
+ */
+export const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Shop-Domain, X-Requested-With',
+  'Access-Control-Allow-Credentials': 'true',
+};
+
+/**
+ * Add CORS headers to a response
+ */
+export function withCors(response: NextResponse): NextResponse {
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+  return response;
+}
+
+/**
+ * Handle OPTIONS preflight request
+ */
+export function handleOptions(): NextResponse {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 export type AuthResult = 
   | {
       success: true;
@@ -129,17 +159,19 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthRes
 }
 
 /**
- * Helper to create an error response
+ * Helper to create an error response with CORS headers
  */
 export function authErrorResponse(result: Extract<AuthResult, { success: false }>): NextResponse {
-  return NextResponse.json(
+  const response = NextResponse.json(
     { error: result.error },
     { status: result.status }
   );
+  return withCors(response);
 }
 
 /**
  * Wrapper for API routes that need authentication
+ * Automatically handles CORS and OPTIONS requests
  * 
  * Usage:
  * ```
@@ -149,17 +181,26 @@ export function authErrorResponse(result: Extract<AuthResult, { success: false }
  *     return NextResponse.json({ data: 'success' });
  *   });
  * }
+ * 
+ * // Don't forget to export OPTIONS handler:
+ * export { handleOptions as OPTIONS } from '@/lib/auth';
  * ```
  */
 export async function withAuth(
   request: NextRequest,
   handler: (shop: string, store: typeof schema.stores.$inferSelect) => Promise<NextResponse>
 ): Promise<NextResponse> {
+  // Handle OPTIONS preflight
+  if (request.method === 'OPTIONS') {
+    return handleOptions();
+  }
+
   const authResult = await authenticateRequest(request);
   
   if (!authResult.success) {
     return authErrorResponse(authResult);
   }
   
-  return handler(authResult.shop, authResult.store);
+  const response = await handler(authResult.shop, authResult.store);
+  return withCors(response);
 }
