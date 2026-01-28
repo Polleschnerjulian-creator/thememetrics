@@ -34,7 +34,7 @@ async function resetStore(shopDomain: string) {
     console.log(`   Found ${analysisIds.length} analyses`);
 
     // Helper function to safely delete from a table
-    async function safeDelete(tableName: string, deletePromise: Promise<any>) {
+    const safeDelete = async (tableName: string, deletePromise: Promise<any>) => {
       try {
         await deletePromise;
         console.log(`   ✅ ${tableName} deleted`);
@@ -45,7 +45,7 @@ async function resetStore(shopDomain: string) {
           console.log(`   ⚠️  ${tableName} - ${error.message}`);
         }
       }
-    }
+    };
 
     // Delete in correct order (respecting foreign keys)
 
