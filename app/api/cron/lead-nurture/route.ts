@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { db } from '@/lib/db';
 import { emailLeads, scheduledEmails } from '@/lib/db/schema';
 import { eq, and, lte, isNull } from 'drizzle-orm';
@@ -9,11 +10,28 @@ import { captureError } from '@/lib/monitoring';
 // Vercel Cron: runs every hour
 export const dynamic = 'force-dynamic';
 
+/**
+ * Timing-safe verification of cron secret to prevent timing attacks
+ */
+function verifyCronSecret(authHeader: string | null): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || !authHeader) return false;
+
+  const expected = `Bearer ${secret}`;
+  if (authHeader.length !== expected.length) return false;
+
+  try {
+    return timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request: NextRequest) {
-  // Verify cron secret
+  // Verify cron secret with timing-safe comparison
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    if (process.env.NODE_ENV === 'production' && process.env.CRON_SECRET) {
+  if (!verifyCronSecret(authHeader)) {
+    if (process.env.NODE_ENV === 'production') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
   }

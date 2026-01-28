@@ -7,19 +7,31 @@ import { isValidShopDomain, sanitizeShopDomain } from './security';
 
 /**
  * CORS headers for embedded Shopify apps
- * Dynamisch basierend auf Origin für bessere Security
+ * Strict validation - only exact Shopify admin or our app URL
  */
 const ALLOWED_ORIGINS = [
   'https://admin.shopify.com',
   process.env.NEXT_PUBLIC_APP_URL || 'https://thememetrics.de',
 ];
 
+/**
+ * Validates if origin is a legitimate Shopify myshopify.com domain
+ * Only allows exact pattern: https://[store-name].myshopify.com
+ */
+function isValidShopifyOrigin(origin: string): boolean {
+  if (!origin) return false;
+
+  // Strict regex: must be https://[alphanumeric-hyphens].myshopify.com (no subpaths)
+  const shopifyPattern = /^https:\/\/[a-z0-9][a-z0-9-]*[a-z0-9]\.myshopify\.com$/i;
+  return shopifyPattern.test(origin);
+}
+
 export function getCorsHeaders(request?: Request): Record<string, string> {
   const origin = request?.headers.get('origin') || '';
 
-  // Prüfe ob Origin erlaubt ist (Shopify Admin oder unsere App URL)
-  const isAllowed = ALLOWED_ORIGINS.some(allowed => origin.startsWith(allowed)) ||
-                    origin.includes('.myshopify.com');
+  // Prüfe ob Origin erlaubt ist (Shopify Admin, unsere App URL, oder valide myshopify.com Domain)
+  const isAllowed = ALLOWED_ORIGINS.some(allowed => origin === allowed) ||
+                    isValidShopifyOrigin(origin);
 
   return {
     'Access-Control-Allow-Origin': isAllowed ? origin : ALLOWED_ORIGINS[0],
@@ -104,11 +116,9 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthRes
     if (payload) {
       shop = getShopFromToken(payload);
       authMethod = 'session_token';
-    } else {
-      // Session token invalid/expired - log but continue to fallback methods
-      // This can happen when tokens expire or during initial app load
-      console.log('[Auth] Session token verification failed, trying fallback auth methods');
     }
+    // Session token invalid/expired - silently continue to fallback methods
+    // This can happen when tokens expire or during initial app load
   }
 
   // 2. Try X-Shop-Domain header (for API calls with shop context)

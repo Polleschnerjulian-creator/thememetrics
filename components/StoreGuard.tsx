@@ -30,7 +30,6 @@ export function StoreGuard({ children }: StoreGuardProps) {
 
         if (res.status === 404) {
           // Store not found - need OAuth
-          console.log('[StoreGuard] Store not found, need OAuth');
 
           // Build OAuth URL
           const params = new URLSearchParams();
@@ -56,16 +55,14 @@ export function StoreGuard({ children }: StoreGuardProps) {
                 try {
                   window.top!.location.href = installUrl;
                 } catch {
-                  // Cross-origin blocked - show button instead
-                  console.log('[StoreGuard] Cross-origin redirect blocked, showing button');
+                  // Cross-origin blocked - show button instead (expected behavior)
                 }
               }, 100);
             } else {
               window.location.href = installUrl;
             }
           } catch {
-            // Can't redirect automatically - show button
-            console.log('[StoreGuard] Auto-redirect failed, showing manual button');
+            // Can't redirect automatically - show button (expected behavior)
           }
           return;
         }

@@ -10,6 +10,59 @@ import { captureError } from '@/lib/monitoring';
 // PageSpeed Insights API (kostenlos, kein API Key nötig für basic usage)
 const PAGESPEED_API = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 
+// Simple in-memory rate limiting
+// For production with multiple instances, use Redis (e.g., @upstash/ratelimit)
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 5; // Max 5 requests per IP per minute
+
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
+}
+
+const rateLimitMap = new Map<string, RateLimitEntry>();
+
+// Cleanup old entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap.entries()) {
+    if (entry.resetTime < now) {
+      rateLimitMap.delete(key);
+    }
+  }
+}, 60000); // Cleanup every minute
+
+function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+
+  if (!entry || entry.resetTime < now) {
+    // New window
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW - 1 };
+  }
+
+  if (entry.count >= MAX_REQUESTS_PER_WINDOW) {
+    return { allowed: false, remaining: 0 };
+  }
+
+  entry.count++;
+  return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW - entry.count };
+}
+
+function getClientIP(request: NextRequest): string {
+  // Vercel/Cloudflare headers
+  const forwarded = request.headers.get('x-forwarded-for');
+  const realIp = request.headers.get('x-real-ip');
+  const cfConnectingIp = request.headers.get('cf-connecting-ip');
+
+  if (cfConnectingIp) return cfConnectingIp;
+  if (realIp) return realIp;
+  if (forwarded) return forwarded.split(',')[0].trim();
+
+  return 'unknown';
+}
+
 interface PageSpeedResult {
   score: number;
   lcp: number;
@@ -215,6 +268,20 @@ function calculateEstimatedRevenueLoss(score: number, monthlyRevenue: number = 5
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const clientIP = getClientIP(request);
+  const rateLimit = checkRateLimit(clientIP);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Zu viele Anfragen. Bitte warte eine Minute.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': '60' }
+      }
+    );
+  }
+
   try {
     const body = await request.json();
     const { email, shopUrl, utm_source, utm_medium, utm_campaign } = body;
@@ -319,6 +386,20 @@ export async function POST(request: NextRequest) {
 
 // GET endpoint for newsletter signup (simpler, no speed check)
 export async function GET(request: NextRequest) {
+  // Rate limiting
+  const clientIP = getClientIP(request);
+  const rateLimit = checkRateLimit(clientIP);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Zu viele Anfragen. Bitte warte eine Minute.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': '60' }
+      }
+    );
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const email = searchParams.get('email');
   const source = searchParams.get('source') || 'newsletter';

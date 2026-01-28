@@ -5,16 +5,30 @@ import { eq, and, desc, gte } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/resend';
 import { weeklyReportEmail } from '@/lib/email/templates';
 import { captureError } from '@/lib/monitoring';
+import { timingSafeEqual } from 'crypto';
 
 // Vercel Cron: runs every Monday at 9:00 AM UTC
 export const dynamic = 'force-dynamic';
 
+function verifyCronSecret(authHeader: string | null): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || !authHeader) return false;
+
+  const expected = `Bearer ${secret}`;
+  if (authHeader.length !== expected.length) return false;
+
+  try {
+    return timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request: NextRequest) {
-  // Verify cron secret (optional but recommended)
+  // Verify cron secret with timing-safe comparison
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    // Allow without auth in development
-    if (process.env.NODE_ENV === 'production' && process.env.CRON_SECRET) {
+  if (!verifyCronSecret(authHeader)) {
+    if (process.env.NODE_ENV === 'production') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
   }
