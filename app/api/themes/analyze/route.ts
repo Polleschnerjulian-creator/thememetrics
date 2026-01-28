@@ -140,7 +140,7 @@ async function hasTranslations(client: any, themeId: string): Promise<boolean> {
   }
 }
 
-async function runAnalysis(request: NextRequest, bodyShop?: string) {
+async function runAnalysis(request: NextRequest, bodyShop?: string): Promise<NextResponse> {
   // Authenticate request using session token or cookie fallback
   const authResult = await authenticateRequest(request);
   
