@@ -425,7 +425,6 @@ function AccessibilityContent() {
         }
       }
     } catch (err) {
-      console.error('Failed to fetch accessibility:', err);
     } finally {
       setLoading(false);
     }
@@ -455,7 +454,6 @@ function AccessibilityContent() {
         }
       }
     } catch (err) {
-      console.error('Failed to analyze:', err);
     } finally {
       setAnalyzing(false);
     }

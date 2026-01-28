@@ -148,7 +148,8 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Client dashboard error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export { OPTIONS } from '@/lib/auth';

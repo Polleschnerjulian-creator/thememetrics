@@ -130,7 +130,6 @@ export default function AgencyDashboard() {
       setLimits(data.limits);
       setError(null);
     } catch (err) {
-      console.error(err);
       setError(t('networkError'));
     } finally {
       setLoading(false);
@@ -153,20 +152,20 @@ export default function AgencyDashboard() {
       });
       fetchAgencyData();
     } catch (err) {
-      console.error(err);
+      // Error toggling client access - will refresh on next call
     }
   };
 
   const deleteWorkspace = async (workspace: Workspace) => {
     if (!confirm(`"${workspace.name}" ${t('confirmDelete')}`)) return;
-    
+
     try {
       await authenticatedFetch(`/api/agency/workspaces?shop=${shop}&id=${workspace.id}`, {
         method: 'DELETE',
       });
       fetchAgencyData();
     } catch (err) {
-      console.error(err);
+      // Error deleting workspace - will refresh on next call
     }
   };
 

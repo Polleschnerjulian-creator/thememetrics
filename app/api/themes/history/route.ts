@@ -6,8 +6,8 @@ import { eq, desc } from 'drizzle-orm';
 import { withAuth, handleOptions } from '@/lib/auth';
 
 // Handle CORS preflight
-export async function OPTIONS() {
-  return handleOptions();
+export async function OPTIONS(request: Request) {
+  return handleOptions(request);
 }
 
 export async function GET(request: NextRequest) {
@@ -166,7 +166,6 @@ export async function GET(request: NextRequest) {
         ...(compare && { hasComparison: !!comparison, comparison }),
       });
     } catch (error) {
-      console.error('Error fetching history:', error);
       return NextResponse.json({ error: 'Failed to fetch history' }, { status: 500 });
     }
   });

@@ -71,7 +71,7 @@ export function OnboardingWrapper({
             });
           }
         })
-        .catch(err => console.error('Revenue fetch error:', err));
+        .catch(err => {});
     }
   }, [shop, isOnboarding, analysisData]);
 

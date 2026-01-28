@@ -157,7 +157,6 @@ function DashboardContent() {
           if (data && data.mobile !== undefined) setPerformanceData(data);
         }
       } catch (e) {
-        console.warn('Cache read error:', e);
       }
       
       try {
@@ -212,7 +211,6 @@ function DashboardContent() {
               allIssues.push(...accessIssues);
             }
           } catch (e) {
-            console.warn('Accessibility fetch failed:', e);
           }
         }
 
@@ -240,7 +238,6 @@ function DashboardContent() {
               allIssues.push(...imgIssues);
             }
           } catch (e) {
-            console.warn('Image fetch failed:', e);
           }
         }
 
@@ -269,7 +266,6 @@ function DashboardContent() {
               }
             }
           } catch (e) {
-            console.warn('Performance fetch failed:', e);
           }
         }
 
@@ -278,7 +274,6 @@ function DashboardContent() {
         }
 
       } catch (err) {
-        console.error('Failed to load data:', err);
       } finally {
         setIsLoading(false);
       }
@@ -317,8 +312,6 @@ function DashboardContent() {
     } catch (err: any) {
       const errorMessage = err.message || 'Analyse fehlgeschlagen. Bitte versuche es erneut.';
       setError(errorMessage);
-      console.error('Analysis error:', err);
-      console.error('Error details:', { message: err.message, stack: err.stack });
     } finally {
       setIsAnalyzing(false);
     }

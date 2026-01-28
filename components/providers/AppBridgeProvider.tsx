@@ -7,9 +7,6 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef } f
 // IMPORTANT: This must match your Shopify App URL exactly
 const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://thememetrics.de';
 
-// Debug logging
-const DEBUG = process.env.NODE_ENV === 'development' || true;
-
 interface AppBridgeContextType {
   isEmbedded: boolean;
   isReady: boolean;
@@ -53,7 +50,7 @@ function getShopDomain(): string | null {
       }
     }
   } catch (e) {
-    console.log('Could not get shop from ancestorOrigins');
+    // Silently fail
   }
   
   // 3. From referrer
@@ -69,7 +66,7 @@ function getShopDomain(): string | null {
       }
     }
   } catch (e) {
-    console.log('Could not get shop from referrer');
+    // Silently fail
   }
   
   return null;
@@ -96,20 +93,12 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
     // Check if we're in an iframe (embedded in Shopify Admin)
     const inIframe = typeof window !== 'undefined' && window !== window.parent;
     setIsEmbedded(inIframe);
-    
-    if (DEBUG) {
-      console.log('[AppBridge] Embedded:', inIframe);
-      console.log('[AppBridge] API_BASE_URL:', API_BASE_URL);
-    }
-    
+
     // Get shop domain
     const shopFromParams = searchParams.get('shop');
     const detectedShop = shopFromParams || getShopDomain();
     if (detectedShop) {
       setShop(detectedShop);
-      console.log('Shop detected:', '-', `"${detectedShop}"`);
-    } else {
-      console.log('No shop detected');
     }
     
     // Check if App Bridge is ready
@@ -118,13 +107,11 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
       if (shopify) {
         // Check for idToken function (new App Bridge)
         if (typeof shopify.idToken === 'function') {
-          console.log('App Bridge ready - window.shopify.idToken available');
           setIsReady(true);
           return true;
         }
         // Check for legacy getIdToken
         if (typeof shopify.getIdToken === 'function') {
-          console.log('App Bridge ready - window.shopify.getIdToken available (legacy)');
           setIsReady(true);
           return true;
         }
@@ -145,8 +132,6 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
         clearInterval(interval);
       } else if (attempts >= maxAttempts) {
         clearInterval(interval);
-        console.warn('App Bridge timeout - proceeding without session tokens');
-        console.log('[AppBridge] window.shopify state:', typeof (window as any).shopify);
         setIsReady(true);
       }
     }, 100);
@@ -163,14 +148,12 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
     // Check cache first (tokens are valid for a short time)
     const now = Date.now();
     if (tokenCacheRef.current && tokenCacheRef.current.expiry > now) {
-      if (DEBUG) console.log('[AppBridge] Using cached token');
       return tokenCacheRef.current.token;
     }
     
     const shopifyGlobal = (window as any).shopify;
-    
+
     if (!shopifyGlobal) {
-      console.log('[AppBridge] window.shopify not available');
       return null;
     }
     
@@ -179,13 +162,12 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
       try {
         const token = await shopifyGlobal.idToken();
         if (token) {
-          console.log('Session token retrieved');
           // Cache token for 50 seconds (tokens typically valid for 60s)
           tokenCacheRef.current = { token, expiry: now + 50000 };
           return token;
         }
       } catch (error) {
-        console.error('Failed to get session token via idToken():', error);
+        // Token retrieval failed, try fallback
       }
     }
     
@@ -194,16 +176,14 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
       try {
         const token = await shopifyGlobal.getIdToken();
         if (token) {
-          console.log('Session token retrieved (legacy method)');
           tokenCacheRef.current = { token, expiry: now + 50000 };
           return token;
         }
       } catch (error) {
-        console.error('Failed to get session token via getIdToken():', error);
+        // Token retrieval failed
       }
     }
-    
-    console.log('[AppBridge] No token method available or token retrieval failed');
+
     return null;
   }, []);
 
@@ -211,24 +191,19 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
   const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
     // Convert to absolute URL for embedded apps
     const absoluteUrl = toAbsoluteUrl(url);
-    console.log('authenticatedFetch:', '-', `"${absoluteUrl}"`);
-    
+
     const token = await getSessionToken();
-    
+
     const headers = new Headers(options.headers);
-    
+
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
-      console.log('Added Authorization header');
-    } else {
-      console.log('[AppBridge] No session token - request will use fallback auth');
     }
-    
+
     // Add shop header from state or try to detect again
     const currentShop = shop || getShopDomain();
     if (currentShop) {
       headers.set('X-Shop-Domain', currentShop);
-      if (DEBUG) console.log('[AppBridge] Added X-Shop-Domain:', currentShop);
     }
     
     // Important: Set content-type for JSON requests

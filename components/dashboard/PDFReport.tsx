@@ -569,7 +569,6 @@ export function PDFReportButton({ shop }: PDFReportButtonProps) {
       doc.save(filename);
 
     } catch (err) {
-      console.error('PDF generation error:', err);
       setError('PDF konnte nicht erstellt werden');
     } finally {
       setIsGenerating(false);

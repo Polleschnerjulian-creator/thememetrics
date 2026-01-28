@@ -22,7 +22,6 @@ export function verifyShopifyWebhook(
   
   const secret = process.env.SHOPIFY_API_SECRET;
   if (!secret) {
-    console.error('SHOPIFY_API_SECRET not configured');
     return false;
   }
   

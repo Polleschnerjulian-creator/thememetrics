@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
+import { captureError } from '@/lib/monitoring';
 
 export async function GET(request: NextRequest) {
   try {
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Agency API error:', error);
+    captureError(error as Error, { tags: { route: 'agency', method: 'GET' } });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -150,7 +151,9 @@ export async function PUT(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('Agency update error:', error);
+    captureError(error as Error, { tags: { route: 'agency', method: 'PUT' } });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export { OPTIONS } from '@/lib/auth';

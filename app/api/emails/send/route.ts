@@ -5,6 +5,7 @@ import {
   sendScoreAlertEmail,
   sendLeadNurtureEmail,
 } from '@/lib/email';
+import { captureError } from '@/lib/monitoring';
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,10 +57,12 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Email API error:', error);
+    captureError(error as Error, { tags: { route: 'emails/send' } });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
+
+export { OPTIONS } from '@/lib/auth';

@@ -11,8 +11,8 @@ import { captureError, measureAsync } from '@/lib/monitoring';
 import { authenticateRequest, authErrorResponse, handleOptions, withCors } from '@/lib/auth';
 
 // Handle CORS preflight
-export async function OPTIONS() {
-  return handleOptions();
+export async function OPTIONS(request: Request) {
+  return handleOptions(request);
 }
 
 async function runAccessibilityCheck(request: NextRequest): Promise<NextResponse> {
@@ -55,7 +55,6 @@ async function runAccessibilityCheck(request: NextRequest): Promise<NextResponse
         if (asset?.value) return asset.value;
       } catch (err) {
         if (i === retries) {
-          console.warn(`Failed to fetch ${key} after ${retries + 1} attempts`);
           return null;
         }
         await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
@@ -86,11 +85,6 @@ async function runAccessibilityCheck(request: NextRequest): Promise<NextResponse
     }
     
     await new Promise(resolve => setTimeout(resolve, 50));
-  }
-
-  console.log(`Accessibility: Analyzed ${analyzedSections.length} sections, failed: ${failedSections.length}`);
-  if (failedSections.length > 0) {
-    console.log('Failed sections:', failedSections.join(', '));
   }
 
   const report = generateAccessibilityReport(sectionResults);

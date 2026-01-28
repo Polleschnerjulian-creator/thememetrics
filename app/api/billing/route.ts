@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { createSubscription, PLANS, PlanId } from '@/lib/billing';
+import { captureError } from '@/lib/monitoring';
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({ confirmationUrl, chargeId });
   } catch (error) {
-    console.error('Billing error:', error);
+    captureError(error, { context: 'Billing error' });
     return NextResponse.json(
       { error: 'Failed to create subscription' },
       { status: 500 }

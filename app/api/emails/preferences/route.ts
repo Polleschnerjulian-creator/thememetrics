@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { emailSubscriptions, stores } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { updateEmailPreferences, createEmailSubscription } from '@/lib/email';
+import { captureError } from '@/lib/monitoring';
 
 // GET - Get current preferences
 export async function GET(request: NextRequest) {
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
       status: subscription.status,
     });
   } catch (error) {
-    console.error('Get preferences error:', error);
+    captureError(error as Error, { tags: { route: 'emails/preferences', action: 'GET' } });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -108,10 +109,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Update preferences error:', error);
+    captureError(error as Error, { tags: { route: 'emails/preferences', action: 'POST' } });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
+
+export { OPTIONS } from '@/lib/auth';

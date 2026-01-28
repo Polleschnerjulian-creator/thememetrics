@@ -57,7 +57,6 @@ function SettingsContent() {
           setHasSubscription(data.hasSubscription);
         }
       } catch (error) {
-        console.error('Failed to load email preferences:', error);
       } finally {
         setLoading(false);
       }
@@ -92,7 +91,6 @@ function SettingsContent() {
         setTimeout(() => setSaved(false), 2000);
       }
     } catch (error) {
-      console.error('Failed to save preferences:', error);
     } finally {
       setSaving(false);
     }

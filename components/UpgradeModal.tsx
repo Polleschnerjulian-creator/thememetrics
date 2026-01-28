@@ -75,11 +75,9 @@ export function UpgradeModal({
         } else {
           window.location.href = data.confirmationUrl;
         }
-      } else if (data.error) {
-        console.error('Upgrade error:', data.error);
       }
     } catch (error) {
-      console.error('Upgrade failed:', error);
+      // Error handling
     } finally {
       setLoading(false);
     }

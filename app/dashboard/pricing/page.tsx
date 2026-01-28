@@ -133,7 +133,6 @@ export default function PricingPage() {
           setUsage(data.usage);
         }
       } catch (error) {
-        console.error('Failed to load subscription:', error);
       } finally {
         setLoadingPlan(false);
       }
@@ -166,8 +165,7 @@ export default function PricingPage() {
       });
 
       const data = await response.json();
-      console.log('Billing response:', data);
-      
+
       if (data.error) {
         alert(`Fehler: ${data.error}`);
         return;
@@ -186,7 +184,6 @@ export default function PricingPage() {
         window.location.reload();
       }
     } catch (error) {
-      console.error('Upgrade error:', error);
       alert('Ein Fehler ist aufgetreten. Bitte versuche es erneut.');
     } finally {
       setLoading(null);

@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { captureError } from '@/lib/monitoring';
 
 // Initialize Resend client
 export const resend = new Resend(process.env.RESEND_API_KEY);
@@ -33,7 +34,7 @@ export async function sendEmail({
 
     return { success: true, id: result.data?.id };
   } catch (error) {
-    console.error('Failed to send email:', error);
+    captureError(error, 'Failed to send email');
     return { success: false, error };
   }
 }

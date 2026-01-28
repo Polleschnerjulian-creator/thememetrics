@@ -76,7 +76,6 @@ export function useAnalysisData(shop: string) {
       }
     } catch (err) {
       setError('Network error');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -105,7 +104,7 @@ export function useHistoryData(shop: string) {
           setData(result);
         }
       } catch (err) {
-        console.error('Failed to load history:', err);
+        // Silently fail
       } finally {
         setLoading(false);
       }

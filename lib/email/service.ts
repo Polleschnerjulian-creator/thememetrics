@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { emailSubscriptions, emailLogs, scheduledEmails, emailLeads, stores } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { sendEmail } from './resend';
+import { captureError } from '@/lib/monitoring';
 import {
   welcomeEmail,
   analysisCompleteEmail,
@@ -39,7 +40,7 @@ export async function createEmailSubscription(
 
     return subscription;
   } catch (error) {
-    console.error('Failed to create email subscription:', error);
+    captureError(error, 'Failed to create email subscription');
     return null;
   }
 }
@@ -63,7 +64,7 @@ export async function updateEmailPreferences(
 
     return true;
   } catch (error) {
-    console.error('Failed to update email preferences:', error);
+    captureError(error, 'Failed to update email preferences');
     return false;
   }
 }
@@ -89,7 +90,7 @@ export async function unsubscribe(email: string) {
 
     return true;
   } catch (error) {
-    console.error('Failed to unsubscribe:', error);
+    captureError(error, 'Failed to unsubscribe');
     return false;
   }
 }
@@ -117,7 +118,7 @@ async function logEmail(
       status: 'sent',
     });
   } catch (error) {
-    console.error('Failed to log email:', error);
+    captureError(error, 'Failed to log email');
   }
 }
 
@@ -167,7 +168,7 @@ export async function sendWelcomeEmail(storeId: number) {
 
     return result;
   } catch (error) {
-    console.error('Failed to send welcome email:', error);
+    captureError(error, 'Failed to send welcome email');
     return { success: false, error };
   }
 }
@@ -220,7 +221,7 @@ export async function sendAnalysisCompleteEmail(
 
     return result;
   } catch (error) {
-    console.error('Failed to send analysis complete email:', error);
+    captureError(error, 'Failed to send analysis complete email');
     return { success: false, error };
   }
 }
@@ -281,7 +282,7 @@ export async function sendScoreAlertEmail(
 
     return result;
   } catch (error) {
-    console.error('Failed to send score alert email:', error);
+    captureError(error, 'Failed to send score alert email');
     return { success: false, error };
   }
 }
@@ -353,7 +354,7 @@ export async function sendLeadNurtureEmail(leadId: number, step: number) {
 
     return result;
   } catch (error) {
-    console.error('Failed to send lead nurture email:', error);
+    captureError(error, 'Failed to send lead nurture email');
     return { success: false, error };
   }
 }
@@ -379,7 +380,7 @@ export async function scheduleEmail(
     });
     return true;
   } catch (error) {
-    console.error('Failed to schedule email:', error);
+    captureError(error, 'Failed to schedule email');
     return false;
   }
 }

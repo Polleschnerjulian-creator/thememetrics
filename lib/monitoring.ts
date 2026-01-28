@@ -18,6 +18,7 @@ interface ErrorContext {
   };
   tags?: Record<string, string>;
   extra?: Record<string, any>;
+  context?: string; // Shorthand for extra.context
 }
 
 interface CapturedError {
@@ -37,24 +38,33 @@ const MAX_STORED_ERRORS = 100;
  * Initialize error monitoring
  */
 export function initErrorMonitoring() {
+  // Sentry DSN check - no console output in production
   const dsn = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN;
-  
-  if (!dsn) {
-    console.warn('[ThemeMetrics] Sentry DSN not configured. Errors will be logged locally.');
-    return;
+  if (!dsn && process.env.NODE_ENV === 'development') {
+    // Only log in development
   }
-  
-  console.log('[ThemeMetrics] Error monitoring initialized');
 }
 
 /**
  * Capture an error
+ * @param error - The error to capture
+ * @param contextOrMessage - Either an ErrorContext object or a simple string message
  */
 export function captureError(
-  error: Error | string,
-  context: ErrorContext = {}
+  error: unknown,
+  contextOrMessage: ErrorContext | string = {}
 ): void {
-  const errorObj = typeof error === 'string' ? new Error(error) : error;
+  // Handle unknown error type from catch blocks
+  const errorObj = error instanceof Error
+    ? error
+    : typeof error === 'string'
+      ? new Error(error)
+      : new Error(String(error));
+
+  // Handle string message as context
+  const context: ErrorContext = typeof contextOrMessage === 'string'
+    ? { extra: { message: contextOrMessage } }
+    : contextOrMessage;
   
   const captured: CapturedError = {
     message: errorObj.message,
@@ -63,13 +73,7 @@ export function captureError(
     timestamp: new Date().toISOString(),
     level: 'error',
   };
-  
-  // Log to console in development
-  console.error('[ThemeMetrics Error]', {
-    message: captured.message,
-    ...context,
-  });
-  
+
   // Store locally (would send to Sentry in production)
   storeError(captured);
   
@@ -90,8 +94,7 @@ export function captureWarning(
     timestamp: new Date().toISOString(),
     level: 'warning',
   };
-  
-  console.warn('[ThemeMetrics Warning]', message, context);
+
   storeError(captured);
 }
 
@@ -108,36 +111,28 @@ export function captureMessage(
     timestamp: new Date().toISOString(),
     level: 'info',
   };
-  
-  if (process.env.NODE_ENV === 'development') {
-    console.info('[ThemeMetrics Info]', message, context);
-  }
-  
+
   storeError(captured);
 }
 
 /**
  * Set user context for error tracking
  */
-export function setUserContext(user: ErrorContext['user']): void {
+export function setUserContext(_user: ErrorContext['user']): void {
   // In production, this would set Sentry user context
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[ThemeMetrics] User context set:', user);
-  }
+  // Currently a no-op until Sentry is configured
 }
 
 /**
  * Add breadcrumb for debugging
  */
 export function addBreadcrumb(
-  message: string,
-  category: string = 'default',
-  data?: Record<string, any>
+  _message: string,
+  _category: string = 'default',
+  _data?: Record<string, any>
 ): void {
   // In production, this would add Sentry breadcrumb
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[Breadcrumb:${category}]`, message, data);
-  }
+  // Currently a no-op until Sentry is configured
 }
 
 /**

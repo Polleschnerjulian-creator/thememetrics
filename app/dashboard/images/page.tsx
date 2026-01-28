@@ -221,7 +221,6 @@ function ImageContent() {
           }
         }
       } catch (err) {
-        console.error('Error fetching data:', err);
       } finally {
         setLoading(false);
       }
@@ -246,7 +245,6 @@ function ImageContent() {
         setAnalyzedAt(new Date().toISOString());
       }
     } catch (err) {
-      console.error('Error running analysis:', err);
     } finally {
       setAnalyzing(false);
     }
@@ -289,7 +287,6 @@ function ImageContent() {
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch (err) {
-      console.error('Failed to copy:', err);
     }
   };
 

@@ -22,13 +22,20 @@ export async function POST(request: NextRequest) {
     captureMessage(`Webhook received: ${topic}`, { tags: { shop: shop || 'unknown' } });
 
     if (topic === 'app/uninstalled' && shop) {
-      await db.update(schema.stores).set({
-        status: 'uninstalled',
-        accessToken: '',
-        updatedAt: new Date(),
-      }).where(eq(schema.stores.shopDomain, shop));
-      
-      captureMessage(`App uninstalled: ${shop}`);
+      // Mark store as uninstalled and invalidate token
+      // Token is set to empty string (auth.ts validates this and returns proper error)
+      // On reinstall, callback route will update token AND reset status to 'active'
+      try {
+        await db.update(schema.stores).set({
+          status: 'uninstalled',
+          accessToken: '',
+          updatedAt: new Date(),
+        }).where(eq(schema.stores.shopDomain, shop));
+
+        captureMessage(`App uninstalled: ${shop}`, { tags: { shop } });
+      } catch (dbError) {
+        captureError(dbError as Error, { tags: { route: 'webhooks', action: 'uninstall', shop } });
+      }
     }
 
     return NextResponse.json({ received: true });

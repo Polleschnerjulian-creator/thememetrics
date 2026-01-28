@@ -5,6 +5,7 @@ import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { scheduleLeadNurtureSequence } from '@/lib/email/service';
 import { sendEmail } from '@/lib/email/resend';
+import { captureError } from '@/lib/monitoring';
 
 // PageSpeed Insights API (kostenlos, kein API Key nötig für basic usage)
 const PAGESPEED_API = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
@@ -39,8 +40,6 @@ async function getPageSpeedData(url: string): Promise<PageSpeedResult | null> {
       fullUrl = `https://${urlWithoutProtocol}.myshopify.com`;
     }
 
-    console.log('Analyzing URL:', fullUrl);
-
     const apiUrl = `${PAGESPEED_API}?url=${encodeURIComponent(fullUrl)}&strategy=mobile&category=performance`;
     
     const response = await fetch(apiUrl, {
@@ -50,14 +49,10 @@ async function getPageSpeedData(url: string): Promise<PageSpeedResult | null> {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('PageSpeed API error:', response.status, errorText);
-      
       // Try with www. prefix if it failed
       if (!fullUrl.includes('www.')) {
         const wwwUrl = fullUrl.replace('https://', 'https://www.');
-        console.log('Retrying with www:', wwwUrl);
-        
+
         const retryResponse = await fetch(`${PAGESPEED_API}?url=${encodeURIComponent(wwwUrl)}&strategy=mobile&category=performance`);
         if (retryResponse.ok) {
           const retryData = await retryResponse.json();
@@ -66,14 +61,14 @@ async function getPageSpeedData(url: string): Promise<PageSpeedResult | null> {
           }
         }
       }
-      
+
       return null;
     }
 
     const data = await response.json();
     return extractPageSpeedData(data);
   } catch (error) {
-    console.error('PageSpeed fetch error:', error);
+    captureError(error as Error, { tags: { function: 'getPageSpeedData' } });
     return null;
   }
 }
@@ -190,7 +185,7 @@ function extractPageSpeedData(data: any): PageSpeedResult | null {
       opportunities: opportunities.slice(0, 3), // Top 3 opportunities
     };
   } catch (error) {
-    console.error('Error extracting PageSpeed data:', error);
+    captureError(error as Error, { tags: { function: 'extractPageSpeedData' } });
     return null;
   }
 }
@@ -241,7 +236,7 @@ export async function POST(request: NextRequest) {
         where: eq(schema.emailLeads.email, email.toLowerCase().trim()),
       });
     } catch (dbError) {
-      console.error('DB query error:', dbError);
+      captureError(dbError as Error, { tags: { route: 'leads', action: 'queryExistingLead' } });
       // Continue anyway - we'll try to insert
     }
 
@@ -276,12 +271,12 @@ export async function POST(request: NextRequest) {
           try {
             await scheduleLeadNurtureSequence(newLead.id, newLead.email);
           } catch (nurturError) {
-            console.error('Failed to schedule nurture sequence:', nurturError);
+            captureError(nurturError as Error, { tags: { route: 'leads', action: 'scheduleNurtureSequence' } });
           }
         }
       }
     } catch (dbError) {
-      console.error('DB insert/update error:', dbError);
+      captureError(dbError as Error, { tags: { route: 'leads', action: 'insertUpdateLead' } });
       // Continue - we still want to show results if we have them
     }
 
@@ -317,7 +312,7 @@ export async function POST(request: NextRequest) {
       message: 'Dein Speed Report wurde erstellt! Check deine E-Mails für den vollständigen Report.',
     });
   } catch (error) {
-    console.error('Speed check error:', error);
+    captureError(error as Error, { tags: { route: 'leads', method: 'POST' } });
     return NextResponse.json({ error: 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.' }, { status: 500 });
   }
 }
@@ -346,7 +341,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'Erfolgreich angemeldet!' });
   } catch (error) {
-    console.error('Newsletter signup error:', error);
+    captureError(error as Error, { tags: { route: 'leads', method: 'GET' } });
     return NextResponse.json({ error: 'Ein Fehler ist aufgetreten' }, { status: 500 });
   }
 }
+
+export { OPTIONS } from '@/lib/auth';

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { activateSubscription, getSubscriptionStatus } from '@/lib/billing';
+import { captureError } from '@/lib/monitoring';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
     // Check if user declined
     return NextResponse.redirect(`${appUrl}/dashboard?billing=cancelled`);
   } catch (error) {
-    console.error('Billing callback error:', error);
+    captureError(error, { context: 'Billing callback error' });
     return NextResponse.redirect(`${appUrl}/dashboard?error=billing_failed`);
   }
 }

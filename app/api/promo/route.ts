@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
+import { captureError } from '@/lib/monitoring';
 
 export async function POST(request: NextRequest) {
   try {
@@ -105,10 +106,12 @@ export async function POST(request: NextRequest) {
       message: `${promoCode.plan.charAt(0).toUpperCase() + promoCode.plan.slice(1)} Plan für ${promoCode.durationMonths} Monat(e) aktiviert!`,
     });
   } catch (error) {
-    console.error('Promo code error:', error);
+    captureError(error, { context: 'Promo code error' });
     return NextResponse.json(
       { error: 'Fehler beim Einlösen des Codes' },
       { status: 500 }
     );
   }
 }
+
+export { OPTIONS } from '@/lib/auth';

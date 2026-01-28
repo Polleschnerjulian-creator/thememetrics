@@ -5,10 +5,11 @@ import { db, schema } from '@/lib/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { PLANS, PlanId, canPerformAction } from '@/lib/billing';
 import { authenticateRequest, handleOptions, withCors } from '@/lib/auth';
+import { captureError } from '@/lib/monitoring';
 
 // Handle CORS preflight
-export async function OPTIONS() {
-  return handleOptions();
+export async function OPTIONS(request: Request) {
+  return handleOptions(request);
 }
 
 interface PageSpeedResponse {
@@ -129,7 +130,7 @@ export async function GET(request: NextRequest) {
       analyzedAt: latestAnalysis.analyzedAt,
     }));
   } catch (error) {
-    console.error('Performance GET error:', error);
+    captureError(error as Error, { tags: { route: 'performance', method: 'GET' } });
     return withCors(NextResponse.json({ error: 'Internal server error' }, { status: 500 }));
   }
 }
@@ -197,8 +198,8 @@ export async function POST(request: NextRequest) {
     
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('PageSpeed API error:', errorData);
-      return NextResponse.json({ 
+      captureError(new Error(`PageSpeed API error: ${errorData.error?.message || 'Unknown error'}`), { tags: { route: 'performance' } });
+      return NextResponse.json({
         error: 'Failed to fetch PageSpeed data',
         details: errorData.error?.message || 'Unknown error'
       }, { status: response.status });
@@ -276,7 +277,7 @@ export async function POST(request: NextRequest) {
 
     return withCors(NextResponse.json(result));
   } catch (error) {
-    console.error('Performance API error:', error);
+    captureError(error as Error, { tags: { route: 'performance', method: 'POST' } });
     return withCors(NextResponse.json({ error: 'Internal server error' }, { status: 500 }));
   }
 }

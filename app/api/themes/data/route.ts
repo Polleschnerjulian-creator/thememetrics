@@ -7,8 +7,8 @@ import { calculateThemeMetricsScore, SectionAnalysisData, ThemeData } from '@/li
 import { withAuth, handleOptions } from '@/lib/auth';
 
 // Handle CORS preflight
-export async function OPTIONS() {
-  return handleOptions();
+export async function OPTIONS(request: Request) {
+  return handleOptions(request);
 }
 
 export async function GET(request: NextRequest) {
@@ -133,7 +133,6 @@ export async function GET(request: NextRequest) {
         },
       });
     } catch (error) {
-      console.error('Error fetching theme data:', error);
       return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
     }
   });

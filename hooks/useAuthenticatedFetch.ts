@@ -57,10 +57,9 @@ export function useFetchWithAuth() {
       const data = await response.json();
       return { data, error: null };
     } catch (err) {
-      console.error('Fetch error:', err);
-      return { 
-        data: null, 
-        error: err instanceof Error ? err.message : 'Network error' 
+      return {
+        data: null,
+        error: err instanceof Error ? err.message : 'Network error'
       };
     }
   }, [authFetch, shop]);

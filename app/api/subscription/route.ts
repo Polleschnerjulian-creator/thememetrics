@@ -96,10 +96,11 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Subscription error:', error);
     return NextResponse.json(
       { error: 'Failed to get subscription' },
       { status: 500 }
     );
   }
 }
+
+export { OPTIONS } from '@/lib/auth';

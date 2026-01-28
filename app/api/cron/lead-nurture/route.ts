@@ -4,6 +4,7 @@ import { emailLeads, scheduledEmails } from '@/lib/db/schema';
 import { eq, and, lte, isNull } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/resend';
 import { leadNurtureDay1, leadNurtureDay3, leadNurtureDay7 } from '@/lib/email/templates';
+import { captureError } from '@/lib/monitoring';
 
 // Vercel Cron: runs every hour
 export const dynamic = 'force-dynamic';
@@ -79,7 +80,6 @@ export async function GET(request: NextRequest) {
             subject = 'Exklusiv für dich: 20% Rabatt 🎁';
             break;
           default:
-            console.log(`Unknown template: ${scheduled.template}`);
             continue;
         }
 
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
 
         sentCount++;
       } catch (error) {
-        console.error(`Failed to send scheduled email ${scheduled.id}:`, error);
+        captureError(error, { context: `Failed to send scheduled email ${scheduled.id}` });
         errorCount++;
       }
     }
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
       processed: dueEmails.length,
     });
   } catch (error) {
-    console.error('Lead nurture cron error:', error);
+    captureError(error, { context: 'Lead nurture cron error' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -17,8 +17,8 @@ import { emailSubscriptions } from '@/lib/db/schema';
 import { authenticateRequest, authErrorResponse, handleOptions, withCors } from '@/lib/auth';
 
 // Handle CORS preflight
-export async function OPTIONS() {
-  return handleOptions();
+export async function OPTIONS(request: Request) {
+  return handleOptions(request);
 }
 
 // Get current month in format '2026-01'
@@ -31,14 +31,13 @@ function getCurrentMonth(): string {
 async function fetchCoreWebVitals(shopDomain: string): Promise<CoreWebVitals | null> {
   const apiKey = process.env.PAGESPEED_API_KEY;
   if (!apiKey) {
-    console.warn('PageSpeed API key not configured');
     return null;
   }
 
   try {
     // Build shop URL
-    const shopUrl = shopDomain.includes('://') 
-      ? shopDomain 
+    const shopUrl = shopDomain.includes('://')
+      ? shopDomain
       : `https://${shopDomain.replace('.myshopify.com', '')}.myshopify.com`;
 
     const apiUrl = new URL('https://www.googleapis.com/pagespeedonline/v5/runPagespeed');
@@ -47,14 +46,11 @@ async function fetchCoreWebVitals(shopDomain: string): Promise<CoreWebVitals | n
     apiUrl.searchParams.set('strategy', 'mobile');
     apiUrl.searchParams.set('category', 'performance');
 
-    console.log(`Fetching PageSpeed for ${shopUrl}...`);
-
     const response = await fetch(apiUrl.toString(), {
       signal: AbortSignal.timeout(60000), // 60 second timeout
     });
 
     if (!response.ok) {
-      console.error('PageSpeed API error:', response.status);
       return null;
     }
 
@@ -62,7 +58,6 @@ async function fetchCoreWebVitals(shopDomain: string): Promise<CoreWebVitals | n
     const audits = data.lighthouseResult?.audits;
 
     if (!audits) {
-      console.error('No audits in PageSpeed response');
       return null;
     }
 
@@ -73,7 +68,7 @@ async function fetchCoreWebVitals(shopDomain: string): Promise<CoreWebVitals | n
       tbt: audits['total-blocking-time']?.numericValue || 300,
     };
   } catch (error) {
-    console.error('PageSpeed fetch error:', error);
+    captureError(error as Error, { tags: { function: 'fetchCoreWebVitals' } });
     return null;
   }
 }
@@ -252,7 +247,7 @@ async function runAnalysis(request: NextRequest, bodyShop?: string): Promise<Nex
         });
       }
     } catch (err) {
-      console.error(`Error fetching asset ${asset.key}:`, err);
+      captureError(err as Error, { tags: { function: 'analyzeSection', assetKey: asset.key } });
     }
   }
 
@@ -272,15 +267,12 @@ async function runAnalysis(request: NextRequest, bodyShop?: string): Promise<Nex
   };
 
   // Calculate ThemeMetrics Score
-  console.log('Calculating ThemeMetrics Score...');
   const scoreBreakdown = calculateThemeMetricsScore(
     coreWebVitals,
     analyzedSections,
     themeData,
     undefined // No revenue data yet
   );
-  
-  console.log(`ThemeMetrics Score: ${scoreBreakdown.overall} (Speed: ${scoreBreakdown.speed.score}, Quality: ${scoreBreakdown.quality.score}, Conversion: ${scoreBreakdown.conversion.score})`);
 
   // Check plan features
   const planFeatures = PLANS[currentPlan].features;
@@ -364,7 +356,7 @@ async function runAnalysis(request: NextRequest, bodyShop?: string): Promise<Nex
         });
       }
     } catch (emailError) {
-      console.error('Failed to send analysis complete email:', emailError);
+      captureError(emailError as Error, { tags: { function: 'sendAnalysisCompleteEmail' } });
     }
   })();
 

@@ -1,4 +1,5 @@
 import { createShopifyClient } from './shopify';
+import { captureError } from '@/lib/monitoring';
 
 // Pricing Plans - Based on 2026 Pricing Strategy
 export const PLANS = {
@@ -182,7 +183,7 @@ export async function activateSubscription(
     
     return false;
   } catch (error) {
-    console.error('Failed to activate subscription:', error);
+    captureError(error);
     return false;
   }
 }
@@ -235,7 +236,7 @@ export async function getSubscriptionStatus(
       trialEndsAt: null,
     };
   } catch (error) {
-    console.error('Failed to get subscription status:', error);
+    captureError(error);
     // Default to free plan on error
     return {
       active: true,
@@ -258,7 +259,7 @@ export async function cancelSubscription(
     await client.post(`/recurring_application_charges/${chargeId}/cancel.json`, {});
     return true;
   } catch (error) {
-    console.error('Failed to cancel subscription:', error);
+    captureError(error);
     return false;
   }
 }

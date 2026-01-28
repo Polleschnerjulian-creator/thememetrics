@@ -254,7 +254,7 @@ function SectionDetailContent() {
           }
         }
       } catch (err) {
-        console.error(err);
+        // Error fetching section data - will show not found
       } finally {
         setLoading(false);
       }

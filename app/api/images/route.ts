@@ -13,8 +13,8 @@ import { captureError, measureAsync } from '@/lib/monitoring';
 import { authenticateRequest, authErrorResponse, handleOptions, withCors } from '@/lib/auth';
 
 // Handle CORS preflight
-export async function OPTIONS() {
-  return handleOptions();
+export async function OPTIONS(request: Request) {
+  return handleOptions(request);
 }
 
 // Cache duration: 1 hour
@@ -53,7 +53,7 @@ async function getOrCreateImageAnalysis(request: NextRequest, forceRefresh: bool
         }
       }
     } catch (err) {
-      console.log('Image analysis cache not available, running fresh analysis');
+      // Cache retrieval failed, will run fresh analysis
     }
   }
 
@@ -145,7 +145,7 @@ async function getOrCreateImageAnalysis(request: NextRequest, forceRefresh: bool
       analyzedAt: now,
     });
   } catch (err) {
-    console.error('Failed to save image analysis:', err);
+    captureError(err as Error, { tags: { route: 'images', function: 'saveAnalysis' } });
   }
 
   return NextResponse.json({

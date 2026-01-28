@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyShopifyWebhook } from '@/lib/security';
-import { captureMessage } from '@/lib/monitoring';
+import { captureMessage, captureError } from '@/lib/monitoring';
 
 /**
  * GDPR Webhook: Customer Data Request
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('GDPR customers/data_request webhook error:', error);
+    captureError(error as Error, { tags: { route: 'webhooks/gdpr', action: 'customers-data-request' } });
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 }

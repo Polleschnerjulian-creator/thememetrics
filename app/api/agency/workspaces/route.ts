@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
+import { captureError } from '@/lib/monitoring';
 
 function generateToken(): string {
   return randomBytes(32).toString('hex');
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Workspace create error:', error);
+    captureError(error as Error, { tags: { route: 'workspaces', method: 'POST' } });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -158,7 +159,7 @@ export async function PUT(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Workspace update error:', error);
+    captureError(error as Error, { tags: { route: 'workspaces', method: 'PUT' } });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -217,7 +218,9 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Workspace delete error:', error);
+    captureError(error as Error, { tags: { route: 'workspaces', method: 'DELETE' } });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export { OPTIONS } from '@/lib/auth';

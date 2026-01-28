@@ -103,7 +103,6 @@ function ThemeAnalysisContent() {
           if (result.hasData) setData(result);
         }
       } catch (err) {
-        console.error(err);
       } finally {
         setLoading(false);
       }

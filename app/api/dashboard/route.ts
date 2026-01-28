@@ -98,7 +98,6 @@ export async function GET(request: NextRequest) {
       });
       
     } catch (error) {
-      console.error('Dashboard API error:', error);
       return NextResponse.json(
         { error: 'Failed to fetch dashboard data' },
         { status: 500 }
@@ -106,3 +105,5 @@ export async function GET(request: NextRequest) {
     }
   });
 }
+
+export { OPTIONS } from '@/lib/auth';

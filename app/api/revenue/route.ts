@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { stores, themeAnalyses, sectionAnalyses } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { createShopifyClient } from '@/lib/shopify';
+import { captureError } from '@/lib/monitoring';
 
 // Industry benchmarks for conversion impact
 const PERFORMANCE_BENCHMARKS = {
@@ -103,7 +104,7 @@ async function getShopAnalytics(shop: string, accessToken: string): Promise<Shop
       ordersCount,
     };
   } catch (error) {
-    console.error('Error fetching shop analytics:', error);
+    captureError(error as Error, { tags: { function: 'getShopAnalytics' } });
     return null;
   }
 }
@@ -267,9 +268,11 @@ export async function GET(request: NextRequest) {
     const impact = calculateRevenueImpact(analytics, currentScore, sections, dataSource);
     
     return NextResponse.json(impact);
-    
+
   } catch (error) {
-    console.error('Revenue calculator error:', error);
+    captureError(error as Error, { tags: { route: 'revenue', method: 'GET' } });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export { OPTIONS } from '@/lib/auth';

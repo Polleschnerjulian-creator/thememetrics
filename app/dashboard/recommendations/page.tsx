@@ -608,7 +608,7 @@ function RecommendationsContent() {
           if (result.hasData) setData(result);
         }
       } catch (err) {
-        console.error(err);
+        // Error fetching data - user will see empty state
       } finally {
         setLoading(false);
       }

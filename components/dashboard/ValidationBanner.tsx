@@ -61,7 +61,7 @@ export function ValidationBanner({ shop, currentScore, onReanalyze }: Validation
           }
         }
       } catch (err) {
-        console.error('Failed to fetch comparison:', err);
+        // Error handling
       } finally {
         setLoading(false);
       }

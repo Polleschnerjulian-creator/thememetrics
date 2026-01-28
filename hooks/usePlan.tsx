@@ -95,7 +95,6 @@ export function PlanProvider({ children, shop }: { children: ReactNode; shop: st
       setUsage(data.usage);
       setError(null);
     } catch (err) {
-      console.error('Failed to load subscription:', err);
       setError('Subscription konnte nicht geladen werden');
       // Default to free plan on error
       setPlan('free');

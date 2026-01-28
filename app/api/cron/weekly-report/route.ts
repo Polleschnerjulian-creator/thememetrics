@@ -4,6 +4,7 @@ import { emailSubscriptions, stores, themeAnalyses, performanceSnapshots } from 
 import { eq, and, desc, gte } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/resend';
 import { weeklyReportEmail } from '@/lib/email/templates';
+import { captureError } from '@/lib/monitoring';
 
 // Vercel Cron: runs every Monday at 9:00 AM UTC
 export const dynamic = 'force-dynamic';
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
 
         sentCount++;
       } catch (error) {
-        console.error(`Failed to send weekly report to ${subscription.email}:`, error);
+        captureError(error, { context: `Failed to send weekly report to ${subscription.email}` });
         errorCount++;
       }
     }
@@ -111,7 +112,7 @@ export async function GET(request: NextRequest) {
       total: subscriptions.length,
     });
   } catch (error) {
-    console.error('Weekly report cron error:', error);
+    captureError(error, { context: 'Weekly report cron error' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

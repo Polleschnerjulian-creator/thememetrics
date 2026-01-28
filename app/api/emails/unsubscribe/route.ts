@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unsubscribe, updateEmailPreferences } from '@/lib/email';
+import { captureError } from '@/lib/monitoring';
 
 // GET - Unsubscribe page (one-click unsubscribe)
 export async function GET(request: NextRequest) {
@@ -56,10 +57,12 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   } catch (error) {
-    console.error('Unsubscribe API error:', error);
+    captureError(error as Error, { tags: { route: 'emails/unsubscribe' } });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
+
+export { OPTIONS } from '@/lib/auth';

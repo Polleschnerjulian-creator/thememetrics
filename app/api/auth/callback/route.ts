@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import { createEmailSubscription } from '@/lib/email';
 import { sendEmail } from '@/lib/email/resend';
 import { welcomeEmail } from '@/lib/email/templates';
+import { captureError } from '@/lib/monitoring';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -42,36 +43,53 @@ export async function GET(request: NextRequest) {
   
   try {
     const { accessToken } = await exchangeCodeForToken(shop, code);
-    
+
+    if (!accessToken) {
+      captureError(new Error(`No access token received for ${shop}`), { tags: { route: 'auth/callback' } });
+      return NextResponse.redirect(`${appUrl}/?error=no_token`);
+    }
+
     const existingStore = await db.query.stores.findFirst({
       where: eq(schema.stores.shopDomain, shop),
     });
-    
+
     let storeId: number;
     let isNewInstall = false;
 
     if (existingStore) {
-      await db.update(schema.stores).set({
-        accessToken,
-        updatedAt: new Date(),
-      }).where(eq(schema.stores.id, existingStore.id));
-      storeId = existingStore.id;
+      // CRITICAL: Also reset status to 'active' when reinstalling
+      try {
+        await db.update(schema.stores).set({
+          accessToken,
+          status: 'active',
+          updatedAt: new Date(),
+        }).where(eq(schema.stores.id, existingStore.id));
+        storeId = existingStore.id;
+      } catch (dbUpdateError) {
+        captureError(dbUpdateError as Error, { tags: { route: 'auth/callback', action: 'updateStore', shop } });
+        return NextResponse.redirect(`${appUrl}/?error=db_update_failed`);
+      }
     } else {
-      const [newStore] = await db.insert(schema.stores).values({
-        shopDomain: shop,
-        accessToken,
-        plan: 'starter',
-        status: 'active',
-        installedAt: new Date(),
-      }).returning();
-      storeId = newStore.id;
-      isNewInstall = true;
+      try {
+        const [newStore] = await db.insert(schema.stores).values({
+          shopDomain: shop,
+          accessToken,
+          plan: 'starter',
+          status: 'active',
+          installedAt: new Date(),
+        }).returning();
+        storeId = newStore.id;
+        isNewInstall = true;
 
-      await db.insert(schema.subscriptions).values({
-        storeId,
-        plan: 'starter',
-        status: 'active',
-      });
+        await db.insert(schema.subscriptions).values({
+          storeId,
+          plan: 'starter',
+          status: 'active',
+        });
+      } catch (dbInsertError) {
+        captureError(dbInsertError as Error, { tags: { route: 'auth/callback', action: 'createStore', shop } });
+        return NextResponse.redirect(`${appUrl}/?error=db_insert_failed`);
+      }
     }
 
     // Send welcome email for new installs
@@ -107,7 +125,7 @@ export async function GET(request: NextRequest) {
         }
       } catch (emailError) {
         // Don't fail the whole auth if email fails
-        console.error('Failed to send welcome email:', emailError);
+        captureError(emailError as Error, { tags: { route: 'auth/callback', action: 'sendWelcomeEmail' } });
       }
     }
     
@@ -134,7 +152,7 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.redirect(`${appUrl}/dashboard?${redirectParams.toString()}`);
   } catch (error) {
-    console.error('OAuth callback error:', error);
+    captureError(error as Error, { tags: { route: 'auth/callback' } });
     return NextResponse.redirect(`${appUrl}/?error=auth_failed`);
   }
 }

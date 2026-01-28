@@ -135,7 +135,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Batch analysis error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -150,8 +149,10 @@ export async function GET(request: NextRequest) {
   }
 
   // For now, return not found - async implementation would track batch jobs
-  return NextResponse.json({ 
+  return NextResponse.json({
     error: 'Batch not found',
     message: 'Batch-Analysen werden synchron ausgeführt. Verwende POST um eine neue Batch-Analyse zu starten.'
   }, { status: 404 });
 }
+
+export { OPTIONS } from '@/lib/auth';

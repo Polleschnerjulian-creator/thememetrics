@@ -207,7 +207,7 @@ export default function PerformancePage() {
           setData(cachedData);
           setHasRunOnce(true);
         } catch (e) {
-          console.warn('Cache parse error:', e);
+          // Cache parse error - continue without cached data
         }
       }
     }

@@ -32,7 +32,6 @@ export function verifySessionToken(token: string): SessionTokenPayload | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) {
-      console.error('Invalid token format');
       return null;
     }
 
@@ -46,7 +45,6 @@ export function verifySessionToken(token: string): SessionTokenPayload | null {
       .digest('base64url');
 
     if (signatureB64 !== expectedSignature) {
-      console.error('Invalid token signature');
       return null;
     }
 
@@ -56,26 +54,22 @@ export function verifySessionToken(token: string): SessionTokenPayload | null {
     // Verify expiration
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp < now) {
-      console.error('Token expired');
       return null;
     }
 
     // Verify not before
     if (payload.nbf > now) {
-      console.error('Token not yet valid');
       return null;
     }
 
     // Verify audience (should match our API key)
     const expectedAudience = process.env.SHOPIFY_API_KEY;
     if (expectedAudience && payload.aud !== expectedAudience) {
-      console.error('Invalid token audience');
       return null;
     }
 
     return payload;
   } catch (error) {
-    console.error('Session token verification failed:', error);
     return null;
   }
 }

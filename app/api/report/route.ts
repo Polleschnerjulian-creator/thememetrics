@@ -123,7 +123,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(reportData);
   } catch (error) {
-    console.error('Error generating report data:', error);
     return NextResponse.json({ error: 'Failed to generate report' }, { status: 500 });
   }
 }
+
+export { OPTIONS } from '@/lib/auth';

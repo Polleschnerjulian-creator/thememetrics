@@ -68,7 +68,7 @@ function BenchmarksContent() {
           if (result.hasData) setData(result);
         }
       } catch (err) {
-        console.error(err);
+        // Error fetching data - user will see loading state
       } finally {
         setLoading(false);
       }
