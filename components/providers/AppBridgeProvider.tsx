@@ -5,7 +5,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef } f
 
 // Base URL for API requests - must be absolute for embedded apps
 // IMPORTANT: This must match your Shopify App URL exactly
-const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://thememetrics.de';
+const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.thememetrics.de';
 
 // Debug logging
 const DEBUG = process.env.NODE_ENV === 'development' || true;
