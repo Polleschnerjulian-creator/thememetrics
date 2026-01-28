@@ -97,7 +97,7 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthRes
 
   // 1. Try Session Token from Authorization header (embedded app flow)
   const sessionToken = getSessionTokenFromRequest(request);
-  
+
   if (sessionToken) {
     const payload = verifySessionToken(sessionToken);
 
@@ -105,12 +105,9 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthRes
       shop = getShopFromToken(payload);
       authMethod = 'session_token';
     } else {
-      // Invalid session token - don't fall back, this is an error
-      return {
-        success: false,
-        error: 'Invalid session token',
-        status: 401,
-      };
+      // Session token invalid/expired - log but continue to fallback methods
+      // This can happen when tokens expire or during initial app load
+      console.log('[Auth] Session token verification failed, trying fallback auth methods');
     }
   }
 
