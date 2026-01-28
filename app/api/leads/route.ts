@@ -25,11 +25,13 @@ const rateLimitMap = new Map<string, RateLimitEntry>();
 // Cleanup old entries periodically
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of rateLimitMap.entries()) {
+  const keysToDelete: string[] = [];
+  rateLimitMap.forEach((entry, key) => {
     if (entry.resetTime < now) {
-      rateLimitMap.delete(key);
+      keysToDelete.push(key);
     }
-  }
+  });
+  keysToDelete.forEach(key => rateLimitMap.delete(key));
 }, 60000); // Cleanup every minute
 
 function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
