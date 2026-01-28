@@ -35,6 +35,7 @@ import {
 import Link from 'next/link';
 import { usePlan } from '@/hooks/usePlan';
 import { useLanguage } from '@/components/providers/LanguageProvider';
+import { UpgradeGate } from '@/components/UpgradeGate';
 
 interface Workspace {
   id: number;
@@ -169,23 +170,18 @@ export default function AgencyDashboard() {
     }
   };
 
+  // Gate for non-agency users
   if (plan !== 'agency') {
     return (
-      <div className="max-w-2xl mx-auto py-16 text-center">
-        <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
-          <Building2 className="w-10 h-10 text-indigo-600 dark:text-indigo-400" />
-        </div>
-        <h1 className="text-2xl font-bold text-foreground mb-3">{t('agencyDashboard')}</h1>
-        <p className="text-muted-foreground mb-6">
-          {t('agencyUpgradeDesc')}
-        </p>
-        <Link
-          href={`/dashboard/pricing?shop=${shop}`}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors"
-        >
-          {t('upgradeToAgency')}
-        </Link>
-      </div>
+      <UpgradeGate
+        feature="agency"
+        requiredPlan="agency"
+        currentPlan={plan}
+        shop={shop}
+        showPreview={false}
+      >
+        <div />
+      </UpgradeGate>
     );
   }
 

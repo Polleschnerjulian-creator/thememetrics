@@ -153,6 +153,129 @@ const FEATURE_CONFIG: Record<string, {
     ],
     icon: Sparkles,
   },
+  // Pro Features (Starter → Pro)
+  scoreSimulator: {
+    title: 'Score-Simulator freischalten',
+    description: 'Simuliere wie sich dein Score verbessert wenn du bestimmte Fixes umsetzt.',
+    benefits: [
+      'Vorher/Nachher Prognose',
+      'Priorisiere die richtigen Fixes',
+      'ROI-Berechnung',
+      'Zeitersparnis durch Fokus',
+    ],
+    icon: TrendingUp,
+    stat: { value: '+35 Punkte', label: 'durchschnittliche Verbesserung' },
+  },
+  pdfWhiteLabel: {
+    title: 'White-Label Reports freischalten',
+    description: 'Erstelle Reports ohne ThemeMetrics Branding - perfekt für Agenturen und Freelancer.',
+    benefits: [
+      'Kein ThemeMetrics Logo',
+      'Professioneller für Kunden',
+      'Als eigener Service verkaufen',
+      'Höhere Margen möglich',
+    ],
+    icon: Sparkles,
+    stat: { value: '€500+', label: 'mehr Umsatz pro Kunde' },
+  },
+  desktopPerformance: {
+    title: 'Desktop-Analyse freischalten',
+    description: 'Analysiere nicht nur Mobile, sondern auch die Desktop-Performance deines Shops.',
+    benefits: [
+      'Desktop Core Web Vitals',
+      'Vollständiges Performance-Bild',
+      '40% deiner Kunden sind Desktop',
+      'Separate Optimierungen',
+    ],
+    icon: Zap,
+    stat: { value: '40%', label: 'der Käufe von Desktop' },
+  },
+  // Agency Features (Pro → Agency)
+  apiAccess: {
+    title: 'API-Zugang freischalten',
+    description: 'Integriere ThemeMetrics in deine eigenen Tools und Workflows.',
+    benefits: [
+      'REST API Zugang',
+      'Automatisierte Analysen',
+      'Custom Integrationen',
+      'Webhooks für Updates',
+    ],
+    icon: Rocket,
+    stat: { value: '∞', label: 'Automatisierung möglich' },
+  },
+  batchAnalysis: {
+    title: 'Batch-Analyse freischalten',
+    description: 'Analysiere mehrere Shops oder Themes gleichzeitig - perfekt für Agenturen.',
+    benefits: [
+      'Mehrere Shops gleichzeitig',
+      'Bulk-Export der Ergebnisse',
+      'Vergleichsreports',
+      'Massive Zeitersparnis',
+    ],
+    icon: Zap,
+    stat: { value: '10x', label: 'schnellere Workflows' },
+  },
+  clientDashboard: {
+    title: 'Client Dashboard freischalten',
+    description: 'Gib deinen Kunden Zugang zu einem eigenen Dashboard mit ihren Reports.',
+    benefits: [
+      'Branded Client Portal',
+      'Automatische Report-Zustellung',
+      'Kunden-Login',
+      'Professioneller Service',
+    ],
+    icon: Crown,
+    stat: { value: '+€200', label: 'mehr pro Kunde möglich' },
+  },
+  teamMembers: {
+    title: 'Team-Zugang freischalten',
+    description: 'Lade dein Team ein und arbeitet gemeinsam an Shop-Optimierungen.',
+    benefits: [
+      'Bis zu 5 Team-Mitglieder',
+      'Rollen & Berechtigungen',
+      'Team-Collaboration',
+      'Aufgaben-Zuweisung',
+    ],
+    icon: Crown,
+    stat: { value: '5x', label: 'mehr Kapazität' },
+  },
+  workspaces: {
+    title: 'Multi-Shop Workspaces freischalten',
+    description: 'Verwalte bis zu 10 verschiedene Shops in einem Account.',
+    benefits: [
+      '10 separate Workspaces',
+      'Übersicht aller Shops',
+      'Zentrale Verwaltung',
+      'Perfekt für Agenturen',
+    ],
+    icon: Crown,
+    stat: { value: '10', label: 'Shops verwalten' },
+  },
+  unlimitedHistory: {
+    title: 'Unbegrenzte Historie freischalten',
+    description: 'Behalte alle historischen Daten für immer - verfolge Trends über Jahre.',
+    benefits: [
+      'Unbegrenzte Datenspeicherung',
+      'Langzeit-Trends erkennen',
+      'Saisonale Patterns',
+      'Historische Vergleiche',
+    ],
+    icon: TrendingUp,
+    stat: { value: '∞', label: 'Monate Historie' },
+  },
+  // Combined Agency feature for Agency page
+  agency: {
+    title: 'Agency Dashboard freischalten',
+    description: 'Das komplette Agentur-Paket: Verwalte mehrere Shops, Teams und Kunden in einem Dashboard.',
+    benefits: [
+      '10 Shop-Workspaces verwalten',
+      '5 Team-Mitglieder einladen',
+      'Client Dashboards für Kunden',
+      'Batch-Analyse & API-Zugang',
+    ],
+    icon: Crown,
+    stat: { value: '€2.000+', label: 'mehr Umsatz/Monat möglich' },
+  },
 };
 
 export function UpgradeGate({
