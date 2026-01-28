@@ -6,7 +6,8 @@ import { eq, and } from 'drizzle-orm';
 import { createShopifyClient } from '@/lib/shopify';
 import { analyzeSection, calculateHealthScore } from '@/lib/parser';
 import { generateRecommendations, countProblematicSections } from '@/lib/recommendations';
-import { PLANS, PlanId, canPerformAction } from '@/lib/billing';
+import { PLANS, PlanId } from '@/lib/billing';
+import { checkAndIncrementUsage } from '@/lib/usage';
 import { calculateThemeMetricsScore, CoreWebVitals, SectionAnalysisData, ThemeData } from '@/lib/score';
 import { checkApiRateLimit, checkDailyAnalysisLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { isValidShopDomain, sanitizeShopDomain } from '@/lib/security';
@@ -15,6 +16,7 @@ import { sendEmail } from '@/lib/email/resend';
 import { analysisCompleteEmail } from '@/lib/email/templates';
 import { emailSubscriptions } from '@/lib/db/schema';
 import { authenticateRequest, authErrorResponse, handleOptions, withCors } from '@/lib/auth';
+import { getCachedPageSpeed, setCachedPageSpeed, cacheScore, CACHE_TTL } from '@/lib/cache';
 
 // Handle CORS preflight
 export async function OPTIONS(request: Request) {
@@ -27,11 +29,17 @@ function getCurrentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-// Fetch Core Web Vitals from Google PageSpeed API
+// Fetch Core Web Vitals from Google PageSpeed API (with 24h caching)
 async function fetchCoreWebVitals(shopDomain: string): Promise<CoreWebVitals | null> {
   const apiKey = process.env.PAGESPEED_API_KEY;
   if (!apiKey) {
     return null;
+  }
+
+  // Check cache first (24h TTL)
+  const cached = await getCachedPageSpeed<CoreWebVitals>(shopDomain, 'mobile');
+  if (cached) {
+    return cached;
   }
 
   try {
@@ -61,56 +69,30 @@ async function fetchCoreWebVitals(shopDomain: string): Promise<CoreWebVitals | n
       return null;
     }
 
-    return {
+    const vitals: CoreWebVitals = {
       lcp: audits['largest-contentful-paint']?.numericValue || 3000,
       cls: audits['cumulative-layout-shift']?.numericValue || 0.1,
       fcp: audits['first-contentful-paint']?.numericValue || 2000,
       tbt: audits['total-blocking-time']?.numericValue || 300,
     };
+
+    // Cache the result for 24 hours
+    await setCachedPageSpeed(shopDomain, 'mobile', vitals);
+
+    return vitals;
   } catch (error) {
     captureError(error as Error, { tags: { function: 'fetchCoreWebVitals' } });
     return null;
   }
 }
 
-// Check plan limits and update usage
+// Check plan limits and update usage (atomic - no race conditions)
 async function checkAndUpdateUsage(storeId: number, planId: PlanId): Promise<{ allowed: boolean; error?: string }> {
-  const currentMonth = getCurrentMonth();
-  
-  let usage = await db.query.usageTracking.findFirst({
-    where: and(
-      eq(schema.usageTracking.storeId, storeId),
-      eq(schema.usageTracking.month, currentMonth)
-    ),
-  });
-
-  if (!usage) {
-    const [newUsage] = await db.insert(schema.usageTracking)
-      .values({
-        storeId,
-        month: currentMonth,
-        themeAnalysesCount: 0,
-        performanceTestsCount: 0,
-        pdfReportsCount: 0,
-      })
-      .returning();
-    usage = newUsage;
-  }
-
-  const check = canPerformAction(planId, 'themeAnalysis', usage.themeAnalysesCount || 0);
-  
-  if (!check.allowed) {
-    return { allowed: false, error: check.reason || 'Limit erreicht' };
-  }
-
-  await db.update(schema.usageTracking)
-    .set({ 
-      themeAnalysesCount: (usage.themeAnalysesCount || 0) + 1,
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.usageTracking.id, usage.id));
-
-  return { allowed: true };
+  const result = await checkAndIncrementUsage(storeId, planId, 'themeAnalysis');
+  return {
+    allowed: result.allowed,
+    error: result.error,
+  };
 }
 
 // Count snippets in theme
@@ -310,6 +292,11 @@ async function runAnalysis(request: NextRequest, bodyShop?: string): Promise<Nex
     tbtMs: coreWebVitals?.tbt ? Math.round(coreWebVitals.tbt) : null,
     fcpMs: coreWebVitals?.fcp ? Math.round(coreWebVitals.fcp) : null,
   }).returning();
+
+  // Cache the score for fast retrieval (non-blocking)
+  cacheScore(savedAnalysis.id, scoreBreakdown).catch(() => {
+    // Silent fail - cache is optional
+  });
 
   // Save section analyses
   if (sectionsWithRecs.length > 0) {

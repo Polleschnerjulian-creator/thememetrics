@@ -283,3 +283,298 @@ export async function measureAsync<T>(
 export function getPerformanceMetrics(): PerformanceMetric[] {
   return [...performanceMetrics];
 }
+
+// ============================================
+// BUSINESS METRICS
+// ============================================
+
+interface BusinessMetric {
+  name: string;
+  value: number;
+  timestamp: string;
+  tags?: Record<string, string>;
+}
+
+const businessMetrics: BusinessMetric[] = [];
+
+/**
+ * Track a business metric
+ */
+export function trackMetric(
+  name: string,
+  value: number,
+  tags?: Record<string, string>
+): void {
+  businessMetrics.push({
+    name,
+    value,
+    timestamp: new Date().toISOString(),
+    tags,
+  });
+
+  // Keep only last 1000 metrics
+  while (businessMetrics.length > 1000) {
+    businessMetrics.shift();
+  }
+}
+
+/**
+ * Get business metrics
+ */
+export function getBusinessMetrics(): BusinessMetric[] {
+  return [...businessMetrics];
+}
+
+// Predefined metric names for consistency
+export const METRICS = {
+  // User Activity
+  ANALYSIS_STARTED: 'analysis.started',
+  ANALYSIS_COMPLETED: 'analysis.completed',
+  ANALYSIS_FAILED: 'analysis.failed',
+
+  // Billing
+  SUBSCRIPTION_CREATED: 'subscription.created',
+  SUBSCRIPTION_UPGRADED: 'subscription.upgraded',
+  SUBSCRIPTION_DOWNGRADED: 'subscription.downgraded',
+  SUBSCRIPTION_CANCELLED: 'subscription.cancelled',
+
+  // Performance
+  API_LATENCY: 'api.latency',
+  DB_QUERY_TIME: 'db.query_time',
+  CACHE_HIT: 'cache.hit',
+  CACHE_MISS: 'cache.miss',
+
+  // Rate Limiting
+  RATE_LIMIT_HIT: 'rate_limit.hit',
+  USAGE_LIMIT_HIT: 'usage_limit.hit',
+} as const;
+
+// ============================================
+// ALERT THRESHOLDS
+// ============================================
+
+interface AlertThreshold {
+  metric: string;
+  condition: 'gt' | 'lt' | 'eq';
+  value: number;
+  severity: 'warning' | 'critical';
+  message: string;
+}
+
+const alertThresholds: AlertThreshold[] = [
+  {
+    metric: METRICS.API_LATENCY,
+    condition: 'gt',
+    value: 5000, // 5 seconds
+    severity: 'warning',
+    message: 'API latency exceeds 5 seconds',
+  },
+  {
+    metric: METRICS.API_LATENCY,
+    condition: 'gt',
+    value: 10000, // 10 seconds
+    severity: 'critical',
+    message: 'API latency exceeds 10 seconds',
+  },
+  {
+    metric: METRICS.ANALYSIS_FAILED,
+    condition: 'gt',
+    value: 5, // 5 failures in a row
+    severity: 'critical',
+    message: 'Multiple analysis failures detected',
+  },
+];
+
+/**
+ * Check if a metric value triggers an alert
+ * Returns the most severe matching threshold
+ */
+export function checkAlertThresholds(
+  metric: string,
+  value: number
+): AlertThreshold | null {
+  let mostSevere: AlertThreshold | null = null;
+
+  for (const threshold of alertThresholds) {
+    if (threshold.metric !== metric) continue;
+
+    let triggered = false;
+    switch (threshold.condition) {
+      case 'gt':
+        triggered = value > threshold.value;
+        break;
+      case 'lt':
+        triggered = value < threshold.value;
+        break;
+      case 'eq':
+        triggered = value === threshold.value;
+        break;
+    }
+
+    if (triggered) {
+      // Keep the most severe threshold
+      if (!mostSevere || threshold.severity === 'critical') {
+        mostSevere = threshold;
+      }
+    }
+  }
+
+  if (mostSevere) {
+    // Capture as warning or error
+    if (mostSevere.severity === 'critical') {
+      captureError(new Error(mostSevere.message), {
+        tags: { metric, severity: 'critical' },
+        extra: { value, threshold: mostSevere.value },
+      });
+    } else {
+      captureWarning(mostSevere.message, {
+        tags: { metric, severity: 'warning' },
+        extra: { value, threshold: mostSevere.value },
+      });
+    }
+  }
+
+  return mostSevere;
+}
+
+// ============================================
+// HEALTH CHECK
+// ============================================
+
+interface HealthStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  components: {
+    database: boolean;
+    cache: boolean;
+    shopify: boolean;
+  };
+  metrics: {
+    errorRate: number;
+    avgLatency: number;
+    uptime: number;
+  };
+  timestamp: string;
+}
+
+// Track startup time for uptime calculation
+const startupTime = Date.now();
+
+/**
+ * Get system health status
+ */
+export function getHealthStatus(): HealthStatus {
+  // Calculate error rate from recent errors
+  const recentErrors = errorStore.filter(e => {
+    const timestamp = new Date(e.timestamp).getTime();
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    return timestamp > fiveMinutesAgo;
+  });
+
+  const errorRate = recentErrors.length;
+
+  // Calculate average latency from recent metrics
+  const recentMetrics = performanceMetrics.filter(m => {
+    const timestamp = new Date(m.timestamp).getTime();
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    return timestamp > fiveMinutesAgo;
+  });
+
+  const avgLatency = recentMetrics.length > 0
+    ? recentMetrics.reduce((sum, m) => sum + m.duration, 0) / recentMetrics.length
+    : 0;
+
+  // Calculate uptime in hours
+  const uptime = (Date.now() - startupTime) / (1000 * 60 * 60);
+
+  // Determine overall status
+  let status: HealthStatus['status'] = 'healthy';
+  if (errorRate > 10 || avgLatency > 5000) {
+    status = 'unhealthy';
+  } else if (errorRate > 3 || avgLatency > 2000) {
+    status = 'degraded';
+  }
+
+  return {
+    status,
+    components: {
+      database: true, // Would check actual connection
+      cache: true,    // Would check Redis
+      shopify: true,  // Would check API availability
+    },
+    metrics: {
+      errorRate,
+      avgLatency: Math.round(avgLatency),
+      uptime: Math.round(uptime * 100) / 100,
+    },
+    timestamp: new Date().toISOString(),
+  };
+}
+
+// ============================================
+// METRIC AGGREGATION
+// ============================================
+
+interface AggregatedMetrics {
+  period: string;
+  totalAnalyses: number;
+  successRate: number;
+  avgScore: number;
+  topErrors: { message: string; count: number }[];
+}
+
+/**
+ * Get aggregated metrics for a time period
+ */
+export function getAggregatedMetrics(periodMinutes: number = 60): AggregatedMetrics {
+  const cutoff = Date.now() - periodMinutes * 60 * 1000;
+
+  // Filter recent business metrics
+  const recentMetrics = businessMetrics.filter(m => {
+    return new Date(m.timestamp).getTime() > cutoff;
+  });
+
+  // Count analyses
+  const totalAnalyses = recentMetrics.filter(
+    m => m.name === METRICS.ANALYSIS_COMPLETED || m.name === METRICS.ANALYSIS_FAILED
+  ).length;
+
+  const successfulAnalyses = recentMetrics.filter(
+    m => m.name === METRICS.ANALYSIS_COMPLETED
+  ).length;
+
+  const successRate = totalAnalyses > 0
+    ? Math.round((successfulAnalyses / totalAnalyses) * 100)
+    : 100;
+
+  // Calculate average score from completed analyses
+  const scoreMetrics = recentMetrics.filter(
+    m => m.name === METRICS.ANALYSIS_COMPLETED && m.value > 0
+  );
+  const avgScore = scoreMetrics.length > 0
+    ? Math.round(scoreMetrics.reduce((sum, m) => sum + m.value, 0) / scoreMetrics.length)
+    : 0;
+
+  // Group recent errors by message
+  const recentErrors = errorStore.filter(e => {
+    return new Date(e.timestamp).getTime() > cutoff;
+  });
+
+  const errorCounts: Record<string, number> = {};
+  recentErrors.forEach(e => {
+    const key = e.message.substring(0, 100);
+    errorCounts[key] = (errorCounts[key] || 0) + 1;
+  });
+
+  const topErrors = Object.entries(errorCounts)
+    .map(([message, count]) => ({ message, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  return {
+    period: `last ${periodMinutes} minutes`,
+    totalAnalyses,
+    successRate,
+    avgScore,
+    topErrors,
+  };
+}

@@ -2,10 +2,11 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { eq, and, desc } from 'drizzle-orm';
-import { PLANS, PlanId, canPerformAction } from '@/lib/billing';
+import { eq, desc } from 'drizzle-orm';
+import { PLANS, PlanId } from '@/lib/billing';
 import { authenticateRequest, handleOptions, withCors } from '@/lib/auth';
 import { captureError } from '@/lib/monitoring';
+import { checkAndIncrementUsage } from '@/lib/usage';
 
 // Handle CORS preflight
 export async function OPTIONS(request: Request) {
@@ -40,56 +41,21 @@ interface PageSpeedResponse {
   };
 }
 
-// Get current month in format '2026-01'
-function getCurrentMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
-
-// Check plan limits and update usage
+// Check plan limits and update usage (atomic - no race conditions)
 async function checkAndUpdateUsage(storeId: number, planId: PlanId, isDesktop: boolean): Promise<{ allowed: boolean; error?: string }> {
-  const currentMonth = getCurrentMonth();
   const features = PLANS[planId].features;
-  
-  // Check desktop permission
+
+  // Check desktop permission first
   if (isDesktop && !features.desktopPerformance) {
     return { allowed: false, error: 'Desktop Performance ist ab dem Starter Plan verfügbar.' };
   }
-  
-  let usage = await db.query.usageTracking.findFirst({
-    where: and(
-      eq(schema.usageTracking.storeId, storeId),
-      eq(schema.usageTracking.month, currentMonth)
-    ),
-  });
 
-  if (!usage) {
-    const [newUsage] = await db.insert(schema.usageTracking)
-      .values({
-        storeId,
-        month: currentMonth,
-        themeAnalysesCount: 0,
-        performanceTestsCount: 0,
-        pdfReportsCount: 0,
-      })
-      .returning();
-    usage = newUsage;
-  }
-
-  const check = canPerformAction(planId, 'performanceTest', usage.performanceTestsCount || 0);
-  
-  if (!check.allowed) {
-    return { allowed: false, error: check.reason || 'Limit erreicht' };
-  }
-
-  await db.update(schema.usageTracking)
-    .set({ 
-      performanceTestsCount: (usage.performanceTestsCount || 0) + 1,
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.usageTracking.id, usage.id));
-
-  return { allowed: true };
+  // Atomic usage check and increment
+  const result = await checkAndIncrementUsage(storeId, planId, 'performanceTest');
+  return {
+    allowed: result.allowed,
+    error: result.error,
+  };
 }
 
 // GET - Return latest performance data (for dashboard)

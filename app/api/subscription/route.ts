@@ -11,6 +11,40 @@ function getCurrentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// Calculate days remaining in trial or billing period
+function getDaysRemaining(endDate: Date | null): number | null {
+  if (!endDate) return null;
+  const now = new Date();
+  const diff = endDate.getTime() - now.getTime();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+// Get upgrade suggestion based on usage
+function getUpgradeSuggestion(
+  planId: PlanId,
+  usagePercent: number
+): { suggest: boolean; reason?: string; suggestedPlan?: PlanId } {
+  if (planId === 'agency') return { suggest: false };
+
+  if (usagePercent >= 90) {
+    const nextPlan = planId === 'free' ? 'starter' : planId === 'starter' ? 'pro' : 'agency';
+    return {
+      suggest: true,
+      reason: 'Du hast fast dein monatliches Limit erreicht',
+      suggestedPlan: nextPlan,
+    };
+  }
+
+  if (usagePercent >= 70) {
+    return {
+      suggest: false,
+      reason: `${Math.round(usagePercent)}% deines Limits verwendet`,
+    };
+  }
+
+  return { suggest: false };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -65,35 +99,83 @@ export async function GET(request: NextRequest) {
     const themeAnalysesLimit = limits.themeAnalysisPerMonth;
     const performanceTestsLimit = limits.performanceTestsPerMonth;
 
-    const themeAnalysesRemaining = themeAnalysesLimit === -1 
-      ? -1 
-      : Math.max(0, themeAnalysesLimit - (usage?.themeAnalysesCount || 0));
-    
-    const performanceTestsRemaining = performanceTestsLimit === -1 
-      ? -1 
-      : Math.max(0, performanceTestsLimit - (usage?.performanceTestsCount || 0));
+    const themeAnalysesUsed = usage?.themeAnalysesCount || 0;
+    const performanceTestsUsed = usage?.performanceTestsCount || 0;
+
+    const themeAnalysesRemaining = themeAnalysesLimit === -1
+      ? -1
+      : Math.max(0, themeAnalysesLimit - themeAnalysesUsed);
+
+    const performanceTestsRemaining = performanceTestsLimit === -1
+      ? -1
+      : Math.max(0, performanceTestsLimit - performanceTestsUsed);
+
+    // Calculate usage percentages
+    const themeAnalysesPercent = themeAnalysesLimit === -1
+      ? 0
+      : Math.round((themeAnalysesUsed / themeAnalysesLimit) * 100);
+
+    const performanceTestsPercent = performanceTestsLimit === -1
+      ? 0
+      : Math.round((performanceTestsUsed / performanceTestsLimit) * 100);
+
+    // Overall usage percent (average of limited resources)
+    const overallUsagePercent = Math.max(themeAnalysesPercent, performanceTestsPercent);
+
+    // Trial information
+    const trialEndsAt = subscription?.trialEndsAt ? new Date(subscription.trialEndsAt) : null;
+    const isTrialing = trialEndsAt && trialEndsAt > new Date();
+    const trialDaysLeft = getDaysRemaining(trialEndsAt);
+
+    // Billing period information
+    const periodEndsAt = subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null;
+    const daysLeftInPeriod = getDaysRemaining(periodEndsAt);
+
+    // Upgrade suggestion
+    const upgradeSuggestion = getUpgradeSuggestion(currentPlan, overallUsagePercent);
 
     return NextResponse.json({
       plan: currentPlan,
       planName: planDetails.name,
       status: subscription?.status || 'active',
       features: planDetails.features,
+
+      // Trial info
+      trial: isTrialing ? {
+        active: true,
+        endsAt: trialEndsAt?.toISOString(),
+        daysLeft: trialDaysLeft,
+      } : null,
+
+      // Billing period
+      billingPeriod: periodEndsAt ? {
+        endsAt: periodEndsAt.toISOString(),
+        daysLeft: daysLeftInPeriod,
+      } : null,
+
+      // Usage with percentages
       usage: {
         month: currentMonth,
+        overallPercent: overallUsagePercent,
         themeAnalyses: {
-          used: usage?.themeAnalysesCount || 0,
+          used: themeAnalysesUsed,
           limit: themeAnalysesLimit,
           remaining: themeAnalysesRemaining,
+          percent: themeAnalysesPercent,
         },
         performanceTests: {
-          used: usage?.performanceTestsCount || 0,
+          used: performanceTestsUsed,
           limit: performanceTestsLimit,
           remaining: performanceTestsRemaining,
+          percent: performanceTestsPercent,
         },
         pdfReports: {
           used: usage?.pdfReportsCount || 0,
         },
       },
+
+      // Upgrade suggestion
+      upgrade: upgradeSuggestion,
     });
   } catch (error) {
     return NextResponse.json(

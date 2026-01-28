@@ -1,0 +1,487 @@
+openapi: 3.0.3
+info:
+  title: ThemeMetrics API
+  description: API für Shopify Theme Performance Analyse
+  version: 1.0.0
+  contact:
+    name: ThemeMetrics Support
+    url: https://thememetrics.de
+
+servers:
+  - url: https://thememetrics.de/api
+    description: Production
+  - url: http://localhost:3000/api
+    description: Development
+
+security:
+  - sessionToken: []
+  - cookieAuth: []
+
+tags:
+  - name: Analysis
+    description: Theme Analyse Endpoints
+  - name: Dashboard
+    description: Dashboard Daten
+  - name: Billing
+    description: Subscription & Billing
+  - name: Agency
+    description: Agency Features
+  - name: Webhooks
+    description: Shopify Webhooks
+
+paths:
+  /themes/analyze:
+    post:
+      tags: [Analysis]
+      summary: Theme analysieren
+      description: Analysiert das aktive Theme eines Shopify Stores
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop:
+                  type: string
+                  example: example.myshopify.com
+              required: [shop]
+      responses:
+        '200':
+          description: Analyse erfolgreich
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/LimitReached'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Dashboard Daten abrufen
+      parameters:
+        - name: shop
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dashboard Daten
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /performance:
+    get:
+      tags: [Analysis]
+      summary: Letzte Performance Daten
+      parameters:
+        - name: shop
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Performance Daten
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceData'
+
+    post:
+      tags: [Analysis]
+      summary: PageSpeed Test durchführen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  example: https://example.myshopify.com
+                strategy:
+                  type: string
+                  enum: [mobile, desktop]
+                  default: mobile
+                shop:
+                  type: string
+      responses:
+        '200':
+          description: PageSpeed Ergebnis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageSpeedResult'
+
+  /report:
+    get:
+      tags: [Dashboard]
+      summary: Report Daten für PDF
+      parameters:
+        - name: shop
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Report Daten
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportData'
+
+  /subscription:
+    get:
+      tags: [Billing]
+      summary: Subscription Status
+      parameters:
+        - name: shop
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscription Info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionInfo'
+
+  /billing:
+    post:
+      tags: [Billing]
+      summary: Plan Upgrade starten
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plan:
+                  type: string
+                  enum: [starter, pro, agency]
+                shop:
+                  type: string
+              required: [plan, shop]
+      responses:
+        '200':
+          description: Shopify Billing URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  confirmationUrl:
+                    type: string
+                  chargeId:
+                    type: integer
+
+  /webhooks:
+    post:
+      tags: [Webhooks]
+      summary: Shopify Webhook Empfänger
+      security: []
+      parameters:
+        - name: X-Shopify-Topic
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-Shopify-Shop-Domain
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-Shopify-Hmac-Sha256
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook verarbeitet
+
+components:
+  securitySchemes:
+    sessionToken:
+      type: http
+      scheme: bearer
+      description: Shopify Session Token
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: shop_session
+
+  schemas:
+    AnalysisResult:
+      type: object
+      properties:
+        theme:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            role:
+              type: string
+            analyzedAt:
+              type: string
+              format: date-time
+        analysis:
+          type: object
+          properties:
+            id:
+              type: integer
+            totalSections:
+              type: integer
+            sections:
+              type: array
+              items:
+                $ref: '#/components/schemas/Section'
+            highImpactCount:
+              type: integer
+        score:
+          $ref: '#/components/schemas/ScoreBreakdown'
+        plan:
+          type: object
+          properties:
+            current:
+              type: string
+            showSectionDetails:
+              type: boolean
+            maxRecommendations:
+              type: integer
+
+    ScoreBreakdown:
+      type: object
+      properties:
+        overall:
+          type: integer
+          minimum: 0
+          maximum: 100
+        speed:
+          type: object
+          properties:
+            score:
+              type: integer
+            coreWebVitals:
+              type: integer
+            sectionLoad:
+              type: integer
+            details:
+              $ref: '#/components/schemas/CoreWebVitals'
+        quality:
+          type: object
+          properties:
+            score:
+              type: integer
+            liquidQuality:
+              type: integer
+            bestPractices:
+              type: integer
+            architecture:
+              type: integer
+        conversion:
+          type: object
+          properties:
+            score:
+              type: integer
+            ecommerce:
+              type: integer
+            mobile:
+              type: integer
+            estimatedMonthlyLoss:
+              type: number
+        hasRealData:
+          type: boolean
+
+    CoreWebVitals:
+      type: object
+      properties:
+        lcp:
+          type: number
+          description: Largest Contentful Paint (ms)
+        cls:
+          type: number
+          description: Cumulative Layout Shift
+        fcp:
+          type: number
+          description: First Contentful Paint (ms)
+        tbt:
+          type: number
+          description: Total Blocking Time (ms)
+
+    Section:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        category:
+          type: string
+        performanceScore:
+          type: integer
+        performanceImpact:
+          type: integer
+        recommendations:
+          type: array
+          items:
+            type: string
+
+    DashboardData:
+      type: object
+      properties:
+        store:
+          type: object
+        subscription:
+          type: object
+        theme:
+          type: object
+        latestSnapshot:
+          type: object
+        sections:
+          type: array
+        recommendations:
+          type: array
+
+    PerformanceData:
+      type: object
+      properties:
+        hasData:
+          type: boolean
+        mobile:
+          type: object
+          properties:
+            performance:
+              type: integer
+            lcp:
+              type: number
+            cls:
+              type: number
+            tbt:
+              type: number
+            fcp:
+              type: number
+        analyzedAt:
+          type: string
+          format: date-time
+
+    PageSpeedResult:
+      type: object
+      properties:
+        scores:
+          type: object
+          properties:
+            performance:
+              type: integer
+            accessibility:
+              type: integer
+            bestPractices:
+              type: integer
+            seo:
+              type: integer
+        labData:
+          type: object
+        fieldData:
+          type: object
+          nullable: true
+        analyzedUrl:
+          type: string
+        strategy:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ReportData:
+      type: object
+      properties:
+        store:
+          type: object
+        agency:
+          type: object
+          nullable: true
+        analysis:
+          type: object
+        sections:
+          type: array
+        history:
+          type: array
+        summary:
+          type: object
+        generatedAt:
+          type: string
+          format: date-time
+
+    SubscriptionInfo:
+      type: object
+      properties:
+        plan:
+          type: string
+          enum: [free, starter, pro, agency]
+        status:
+          type: string
+          enum: [active, cancelled, pending, expired]
+        features:
+          type: object
+        usage:
+          type: object
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        upgradeRequired:
+          type: boolean
+
+  responses:
+    Unauthorized:
+      description: Nicht authentifiziert
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: not_authenticated
+            message: Session fehlt oder ungültig
+
+    LimitReached:
+      description: Plan-Limit erreicht
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: limit_reached
+            message: Monatliches Limit erreicht
+            upgradeRequired: true
+
+    RateLimited:
+      description: Rate Limit erreicht
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: rate_limited
+            message: Zu viele Requests

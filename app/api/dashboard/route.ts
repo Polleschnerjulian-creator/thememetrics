@@ -8,16 +8,17 @@ import { withAuth } from '@/lib/auth';
 export async function GET(request: NextRequest) {
   return withAuth(request, async (shop, store) => {
     try {
-      const theme = await db.query.themes.findFirst({
-        where: eq(schema.themes.storeId, store.id),
-        orderBy: [desc(schema.themes.createdAt)],
-      });
-      
-      // Get subscription
-      const subscription = await db.query.subscriptions.findFirst({
-        where: eq(schema.subscriptions.storeId, store.id),
-      });
-      
+      // Phase 1: Parallel queries that don't depend on each other
+      const [theme, subscription] = await Promise.all([
+        db.query.themes.findFirst({
+          where: eq(schema.themes.storeId, store.id),
+          orderBy: [desc(schema.themes.createdAt)],
+        }),
+        db.query.subscriptions.findFirst({
+          where: eq(schema.subscriptions.storeId, store.id),
+        }),
+      ]);
+
       if (!theme) {
         return NextResponse.json({
           store: {
@@ -28,28 +29,29 @@ export async function GET(request: NextRequest) {
           needsAnalysis: true,
         });
       }
-      
-      const latestSnapshot = await db.query.performanceSnapshots.findFirst({
-        where: eq(schema.performanceSnapshots.themeId, theme.id),
-        orderBy: [desc(schema.performanceSnapshots.createdAt)],
-      });
-      
-      const sections = await db.query.sections.findMany({
-        where: eq(schema.sections.themeId, theme.id),
-      });
-      
-      const recommendations = await db.query.recommendations.findMany({
-        where: and(
-          eq(schema.recommendations.storeId, store.id),
-          eq(schema.recommendations.status, 'open')
-        ),
-        orderBy: [desc(schema.recommendations.impactScore)],
-        limit: 10,
-      });
-      
+
+      // Phase 2: Parallel queries that depend on theme.id
+      const [latestSnapshot, sections, recommendations] = await Promise.all([
+        db.query.performanceSnapshots.findFirst({
+          where: eq(schema.performanceSnapshots.themeId, theme.id),
+          orderBy: [desc(schema.performanceSnapshots.createdAt)],
+        }),
+        db.query.sections.findMany({
+          where: eq(schema.sections.themeId, theme.id),
+        }),
+        db.query.recommendations.findMany({
+          where: and(
+            eq(schema.recommendations.storeId, store.id),
+            eq(schema.recommendations.status, 'open')
+          ),
+          orderBy: [desc(schema.recommendations.impactScore)],
+          limit: 10,
+        }),
+      ]);
+
       const totalLoadTime = sections.reduce((sum, s) => sum + (s.estimatedLoadTimeMs || 0), 0);
       const criticalIssues = recommendations.filter(r => r.severity === 'critical').length;
-      
+
       return NextResponse.json({
         store: {
           id: store.id,
@@ -96,7 +98,7 @@ export async function GET(request: NextRequest) {
         })),
         needsAnalysis: !theme.analyzedAt,
       });
-      
+
     } catch (error) {
       return NextResponse.json(
         { error: 'Failed to fetch dashboard data' },

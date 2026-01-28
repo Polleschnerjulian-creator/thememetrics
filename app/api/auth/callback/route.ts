@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 import { createEmailSubscription } from '@/lib/email';
 import { sendEmail } from '@/lib/email/resend';
 import { welcomeEmail } from '@/lib/email/templates';
-import { captureError } from '@/lib/monitoring';
+import { captureError, captureMessage } from '@/lib/monitoring';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -19,16 +19,11 @@ export async function GET(request: NextRequest) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-  // Log callback attempt for debugging
-  console.log('[Auth Callback] Received:', { shop, hasCode: !!code, hasState: !!state });
-
   if (!code || !state || !shop) {
-    console.log('[Auth Callback] Missing params:', { code: !!code, state: !!state, shop: !!shop });
     return NextResponse.redirect(`${appUrl}/?error=missing_params`);
   }
 
   if (!isValidShopDomain(shop)) {
-    console.log('[Auth Callback] Invalid shop domain:', shop);
     return NextResponse.redirect(`${appUrl}/?error=invalid_shop`);
   }
 
@@ -38,19 +33,9 @@ export async function GET(request: NextRequest) {
   const storedHost = cookieStore.get('shopify_host')?.value;
   const host = hostFromQuery || storedHost;
 
-  console.log('[Auth Callback] Cookies:', {
-    hasStoredState: !!storedState,
-    hasStoredShop: !!storedShop,
-    stateMatch: storedState === state,
-    shopMatch: storedShop === shop
-  });
-
   // RELAXED VALIDATION: If cookies are missing (Safari/third-party cookie blocking),
   // still proceed if we have valid shop and code from Shopify
-  // The state validation is a CSRF protection, but Shopify's own redirect is trusted
   if (!storedState || state !== storedState) {
-    // Log but don't fail - cookies might be blocked
-    console.log('[Auth Callback] State mismatch - cookies may be blocked, proceeding anyway');
     captureError(new Error('OAuth state mismatch - cookies may be blocked'), {
       tags: { route: 'auth/callback', shop },
       extra: { hasStoredState: !!storedState, stateMatch: storedState === state }
@@ -59,22 +44,17 @@ export async function GET(request: NextRequest) {
   }
 
   if (storedShop && shop !== storedShop) {
-    // Only fail if we have a stored shop that doesn't match
-    console.log('[Auth Callback] Shop mismatch:', { stored: storedShop, received: shop });
     return NextResponse.redirect(`${appUrl}/?error=shop_mismatch`);
   }
-  
+
   try {
-    console.log('[Auth Callback] Exchanging code for token...');
     const { accessToken } = await exchangeCodeForToken(shop, code);
 
     if (!accessToken) {
-      console.log('[Auth Callback] No access token received!');
       captureError(new Error(`No access token received for ${shop}`), { tags: { route: 'auth/callback' } });
       return NextResponse.redirect(`${appUrl}/?error=no_token`);
     }
 
-    console.log('[Auth Callback] Got access token, checking for existing store...');
     const existingStore = await db.query.stores.findFirst({
       where: eq(schema.stores.shopDomain, shop),
     });
@@ -83,7 +63,6 @@ export async function GET(request: NextRequest) {
     let isNewInstall = false;
 
     if (existingStore) {
-      console.log('[Auth Callback] Updating existing store:', existingStore.id);
       try {
         await db.update(schema.stores).set({
           accessToken,
@@ -91,14 +70,11 @@ export async function GET(request: NextRequest) {
           updatedAt: new Date(),
         }).where(eq(schema.stores.id, existingStore.id));
         storeId = existingStore.id;
-        console.log('[Auth Callback] Store updated successfully');
       } catch (dbUpdateError) {
-        console.log('[Auth Callback] DB update error:', dbUpdateError);
         captureError(dbUpdateError as Error, { tags: { route: 'auth/callback', action: 'updateStore', shop } });
         return NextResponse.redirect(`${appUrl}/?error=db_update_failed`);
       }
     } else {
-      console.log('[Auth Callback] Creating new store...');
       try {
         const [newStore] = await db.insert(schema.stores).values({
           shopDomain: shop,
@@ -109,16 +85,15 @@ export async function GET(request: NextRequest) {
         }).returning();
         storeId = newStore.id;
         isNewInstall = true;
-        console.log('[Auth Callback] Store created with ID:', storeId);
 
         await db.insert(schema.subscriptions).values({
           storeId,
           plan: 'starter',
           status: 'active',
         });
-        console.log('[Auth Callback] Subscription created');
+
+        captureMessage(`New store installed: ${shop}`, { tags: { shop, storeId: String(storeId) } });
       } catch (dbInsertError) {
-        console.log('[Auth Callback] DB insert error:', dbInsertError);
         captureError(dbInsertError as Error, { tags: { route: 'auth/callback', action: 'createStore', shop } });
         return NextResponse.redirect(`${appUrl}/?error=db_insert_failed`);
       }
@@ -126,8 +101,6 @@ export async function GET(request: NextRequest) {
 
     // Send welcome email for new installs (non-blocking)
     if (isNewInstall) {
-      console.log('[Auth Callback] New install - attempting to send welcome email...');
-      // Run email sending in background - don't block the auth flow
       (async () => {
         try {
           const shopDataResponse = await fetch(`https://${shop}/admin/api/2024-01/shop.json`, {
@@ -143,14 +116,12 @@ export async function GET(request: NextRequest) {
             const shopName = shopData.shop?.name || shop.replace('.myshopify.com', '');
 
             if (shopEmail) {
-              // Try to create email subscription (table might not exist)
               try {
                 await createEmailSubscription(shopEmail, storeId, 'user');
               } catch {
                 // Ignore - table might not exist
               }
 
-              // Send welcome email
               const dashboardUrl = `${appUrl}/dashboard?shop=${shop}`;
               const html = welcomeEmail({ storeName: shopName, dashboardUrl });
 
@@ -159,19 +130,17 @@ export async function GET(request: NextRequest) {
                 subject: `Willkommen bei ThemeMetrics, ${shopName}! 🎉`,
                 html,
               });
-              console.log('[Auth Callback] Welcome email sent to:', shopEmail);
             }
           }
         } catch (emailError) {
-          console.log('[Auth Callback] Email error (non-fatal):', emailError);
           captureError(emailError as Error, { tags: { route: 'auth/callback', action: 'sendWelcomeEmail' } });
         }
       })();
     }
-    
+
     cookieStore.delete('shopify_oauth_state');
     cookieStore.delete('shopify_shop');
-    cookieStore.delete('shopify_host'); // Clean up host cookie
+    cookieStore.delete('shopify_host');
     cookieStore.set('shop_session', shop, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -179,8 +148,7 @@ export async function GET(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 7,
       path: '/',
     });
-    
-    // Build redirect URL with host parameter for embedded apps
+
     const redirectParams = new URLSearchParams();
     redirectParams.set('shop', shop);
     if (host) {
@@ -190,12 +158,9 @@ export async function GET(request: NextRequest) {
       redirectParams.set('installed', 'true');
     }
 
-    const redirectUrl = `${appUrl}/dashboard?${redirectParams.toString()}`;
-    console.log('[Auth Callback] SUCCESS! Redirecting to:', redirectUrl);
-    return NextResponse.redirect(redirectUrl);
+    return NextResponse.redirect(`${appUrl}/dashboard?${redirectParams.toString()}`);
   } catch (error) {
-    console.log('[Auth Callback] FATAL ERROR:', error);
-    captureError(error as Error, { tags: { route: 'auth/callback' } });
+    captureError(error as Error, { tags: { route: 'auth/callback', shop } });
     return NextResponse.redirect(`${appUrl}/?error=auth_failed`);
   }
 }

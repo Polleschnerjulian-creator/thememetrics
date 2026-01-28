@@ -88,15 +88,15 @@ export interface Recommendation {
   createdAt: Date;
 }
 
-// Subscription types
+// Subscription types (Shopify Billing only)
 export interface Subscription {
   id: string;
   storeId: string;
-  stripeSubscriptionId: string | null;
-  stripeCustomerId: string | null;
-  plan: 'starter' | 'fashion_pro' | 'agency';
-  status: 'active' | 'canceled' | 'past_due' | 'trialing';
+  shopifyChargeId: string | null; // Shopify RecurringApplicationCharge ID
+  plan: 'free' | 'starter' | 'pro' | 'agency';
+  status: 'active' | 'cancelled' | 'pending' | 'expired';
   currentPeriodEnd: Date | null;
+  trialEndsAt: Date | null;
   createdAt: Date;
 }
 

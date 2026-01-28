@@ -73,9 +73,8 @@ export function StoreGuard({ children }: StoreGuardProps) {
 
         setStatus('ok');
       } catch (error) {
-        console.error('[StoreGuard] Error:', error);
         setStatus('error');
-        setErrorMessage(String(error));
+        setErrorMessage(error instanceof Error ? error.message : 'Unbekannter Fehler');
       }
     }
 

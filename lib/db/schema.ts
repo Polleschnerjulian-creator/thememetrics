@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, integer, serial, json, boolean, decimal } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, integer, serial, json, boolean, decimal, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const stores = pgTable('stores', {
@@ -26,12 +26,15 @@ export const subscriptions = pgTable('subscriptions', {
   storeId: integer('store_id').references(() => stores.id).notNull(),
   plan: text('plan').default('starter'),
   status: text('status').default('active'),
-  stripeCustomerId: text('stripe_customer_id'),
-  stripeSubscriptionId: text('stripe_subscription_id'),
+  // Shopify Billing
+  shopifyChargeId: text('shopify_charge_id'), // RecurringApplicationCharge ID
   currentPeriodEnd: timestamp('current_period_end'),
+  trialEndsAt: timestamp('trial_ends_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => [
+  index('idx_subscriptions_store').on(table.storeId),
+]);
 
 export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
   store: one(stores, {
@@ -48,7 +51,9 @@ export const themes = pgTable('themes', {
   role: text('role'),
   analyzedAt: timestamp('analyzed_at'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index('idx_themes_store_created').on(table.storeId, table.createdAt),
+]);
 
 export const themesRelations = relations(themes, ({ one, many }) => ({
   store: one(stores, {
@@ -72,7 +77,9 @@ export const sections = pgTable('sections', {
   hasAnimations: boolean('has_animations').default(false),
   hasLazyLoading: boolean('has_lazy_loading').default(false),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index('idx_sections_theme').on(table.themeId),
+]);
 
 export const sectionsRelations = relations(sections, ({ one }) => ({
   theme: one(themes, {
@@ -89,7 +96,9 @@ export const performanceSnapshots = pgTable('performance_snapshots', {
   desktopScore: integer('desktop_score'),
   totalLoadTimeMs: integer('total_load_time_ms'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index('idx_snapshots_theme_created').on(table.themeId, table.createdAt),
+]);
 
 export const performanceSnapshotsRelations = relations(performanceSnapshots, ({ one }) => ({
   theme: one(themes, {
@@ -112,7 +121,9 @@ export const recommendations = pgTable('recommendations', {
   estimatedRevenueImpact: decimal('estimated_revenue_impact'),
   status: text('status').default('open'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index('idx_recommendations_store_status_impact').on(table.storeId, table.status, table.impactScore),
+]);
 
 export const recommendationsRelations = relations(recommendations, ({ one }) => ({
   store: one(stores, {
@@ -139,7 +150,9 @@ export const themeAnalyses = pgTable('theme_analyses', {
   tbtMs: integer('tbt_ms'), // Total Blocking Time in ms
   fcpMs: integer('fcp_ms'), // First Contentful Paint in ms
   analyzedAt: timestamp('analyzed_at').defaultNow(),
-});
+}, (table) => [
+  index('idx_analyses_store_date').on(table.storeId, table.analyzedAt),
+]);
 
 export const sectionAnalyses = pgTable('section_analyses', {
   id: serial('id').primaryKey(),
@@ -150,7 +163,9 @@ export const sectionAnalyses = pgTable('section_analyses', {
   performanceScore: integer('performance_score').notNull(),
   recommendations: json('recommendations').$type<string[]>(),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index('idx_section_analyses_analysis').on(table.analysisId),
+]);
 
 // Usage tracking for plan limits
 export const usageTracking = pgTable('usage_tracking', {
@@ -162,7 +177,10 @@ export const usageTracking = pgTable('usage_tracking', {
   pdfReportsCount: integer('pdf_reports_count').default(0),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => [
+  // Unique constraint for atomic upserts (prevents race conditions)
+  uniqueIndex('idx_usage_store_month_unique').on(table.storeId, table.month),
+]);
 
 export const usageTrackingRelations = relations(usageTracking, ({ one }) => ({
   store: one(stores, {
@@ -259,7 +277,9 @@ export const agencies = pgTable('agencies', {
   maxTeamMembers: integer('max_team_members').default(5),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => [
+  index('idx_agencies_owner_store').on(table.ownerStoreId),
+]);
 
 export const agenciesRelations = relations(agencies, ({ one, many }) => ({
   ownerStore: one(stores, {
@@ -286,7 +306,10 @@ export const workspaces = pgTable('workspaces', {
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => [
+  index('idx_workspaces_agency').on(table.agencyId),
+  index('idx_workspaces_store').on(table.storeId),
+]);
 
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   agency: one(agencies, {
