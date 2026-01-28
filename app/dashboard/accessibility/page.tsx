@@ -6,6 +6,8 @@ import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { AccessibilitySkeleton } from '@/components/ui/skeleton';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeGate } from '@/components/UpgradeGate';
 import { 
   ArrowLeft, 
   Eye, 
@@ -371,6 +373,7 @@ function getShopFromUrl(): string {
 function AccessibilityContent() {
   const searchParams = useSearchParams();
   const { authenticatedFetch } = useAppBridge();
+  const { plan } = usePlan();
   const [shop, setShop] = useState('');
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -580,6 +583,13 @@ function AccessibilityContent() {
   }
 
   return (
+    <UpgradeGate
+      feature="accessibility"
+      requiredPlan="starter"
+      currentPlan={plan}
+      shop={shop}
+      showPreview={true}
+    >
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -1179,6 +1189,7 @@ function AccessibilityContent() {
         </>
       )}
     </div>
+    </UpgradeGate>
   );
 }
 

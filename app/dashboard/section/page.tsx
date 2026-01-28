@@ -6,6 +6,8 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { SectionSkeleton } from '@/components/ui/skeleton';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeGate } from '@/components/UpgradeGate';
 import { 
   ArrowLeft, 
   Code, 
@@ -215,6 +217,7 @@ function getShopFromUrl(): string {
 function SectionDetailContent() {
   const searchParams = useSearchParams();
   const { authenticatedFetch } = useAppBridge();
+  const { plan } = usePlan();
   const sectionName = searchParams.get('section') || '';
   const [shop, setShop] = useState('');
   const [section, setSection] = useState<SectionDetail | null>(null);
@@ -301,6 +304,13 @@ function SectionDetailContent() {
   };
 
   return (
+    <UpgradeGate
+      feature="sectionDetails"
+      requiredPlan="starter"
+      currentPlan={plan}
+      shop={shop}
+      showPreview={true}
+    >
     <div className="space-y-6">
       {/* Header */}
       <div>
@@ -503,6 +513,7 @@ function SectionDetailContent() {
         </div>
       )}
     </div>
+    </UpgradeGate>
   );
 }
 

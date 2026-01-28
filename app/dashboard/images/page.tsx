@@ -5,6 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ImagesSkeleton } from '@/components/ui/skeleton';
 import { useAppBridge } from '@/components/providers/AppBridgeProvider';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeGate } from '@/components/UpgradeGate';
 import { 
   ArrowLeft, 
   Image as ImageIcon,
@@ -178,6 +180,7 @@ function getStepGuide(issue: ImageIssue): StepGuide {
 function ImageContent() {
   const searchParams = useSearchParams();
   const { authenticatedFetch } = useAppBridge();
+  const { plan } = usePlan();
   const [shop, setShop] = useState('');
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -327,6 +330,9 @@ function ImageContent() {
     return <ImagesSkeleton />;
   }
 
+  // Gate for Free users - images is a Starter+ feature
+  const isGated = plan === 'free';
+
   // Filter and sort issues
   const allIssues = report?.issues || [];
   const filteredIssues = allIssues.filter(issue => {
@@ -357,6 +363,13 @@ function ImageContent() {
   const completedCount = completedFixes.size;
 
   return (
+    <UpgradeGate
+      feature="images"
+      requiredPlan="starter"
+      currentPlan={plan}
+      shop={shop}
+      showPreview={true}
+    >
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
@@ -692,6 +705,7 @@ function ImageContent() {
         </>
       )}
     </div>
+    </UpgradeGate>
   );
 }
 

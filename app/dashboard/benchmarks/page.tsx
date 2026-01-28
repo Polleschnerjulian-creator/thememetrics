@@ -6,6 +6,8 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, BarChart3, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeGate } from '@/components/UpgradeGate';
 
 const INDUSTRY_BENCHMARKS: Record<string, number> = {
   hero: 60, header: 70, footer: 75, product: 55, collection: 60,
@@ -47,6 +49,7 @@ function getShopFromUrl(): string {
 function BenchmarksContent() {
   const searchParams = useSearchParams();
   const { authenticatedFetch } = useAppBridge();
+  const { plan } = usePlan();
   const [shop, setShop] = useState('');
 
   useEffect(() => {
@@ -110,6 +113,13 @@ function BenchmarksContent() {
   const overallComp = getComparison(overallScore, overallBenchmark);
 
   return (
+    <UpgradeGate
+      feature="benchmarks"
+      requiredPlan="pro"
+      currentPlan={plan}
+      shop={shop}
+      showPreview={true}
+    >
     <div className="space-y-6">
       <div>
         <Link href={`/dashboard?shop=${shop}`} className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm mb-2">
@@ -208,6 +218,7 @@ function BenchmarksContent() {
         </>
       )}
     </div>
+    </UpgradeGate>
   );
 }
 
