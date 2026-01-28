@@ -84,39 +84,36 @@ const FEATURE_CONFIG: Record<string, {
 }> = {
   images: {
     title: 'Bildoptimierung freischalten',
-    description: 'Finde alle Bild-Probleme in deinem Theme und bekomme konkrete Fixes, um deine Ladezeit drastisch zu verbessern.',
+    description: 'Finde alle Bild-Probleme in deinem Theme und bekomme konkrete Fixes für bessere Ladezeiten.',
     benefits: [
       'Alle Bild-Issues auf einen Blick',
       'Copy-Paste Code-Fixes',
       'Schritt-für-Schritt Anleitungen',
-      'Geschätzte Ladezeit-Ersparnis',
+      'Einsparpotenzial in KB/MB',
     ],
     icon: Sparkles,
-    stat: { value: '-40%', label: 'schnellere Ladezeit möglich' },
   },
   accessibility: {
     title: 'Accessibility-Analyse freischalten',
-    description: 'Mach deinen Shop barrierefrei und erreiche mehr Kunden. Plus: Bessere SEO-Rankings durch Accessibility.',
+    description: 'Mach deinen Shop barrierefrei und verbessere gleichzeitig dein SEO-Ranking.',
     benefits: [
       'WCAG 2.1 Compliance Check',
       'Konkrete Verbesserungsvorschläge',
       'SEO-Boost durch Accessibility',
-      'Mehr Kunden erreichen',
+      'Barrierefreie Navigation',
     ],
     icon: TrendingUp,
-    stat: { value: '+15%', label: 'mehr potenzielle Kunden' },
   },
   benchmarks: {
     title: 'Competitor Benchmarking freischalten',
     description: 'Vergleiche deinen Shop mit der Konkurrenz und finde heraus, wo du besser sein kannst.',
     benefits: [
-      'Vergleich mit Top-Competitors',
+      'Vergleich mit Competitors',
       'Performance-Rankings',
       'Branchenspezifische Insights',
       'Konkrete Handlungsempfehlungen',
     ],
     icon: TrendingUp,
-    stat: { value: 'Top 10%', label: 'der Shops erreichen' },
   },
   sectionDetails: {
     title: 'Section-Details freischalten',
@@ -128,7 +125,6 @@ const FEATURE_CONFIG: Record<string, {
       'Priorisierte Empfehlungen',
     ],
     icon: Zap,
-    stat: { value: '100%', label: 'Theme-Transparenz' },
   },
   codeFixes: {
     title: 'Code-Fixes freischalten',
@@ -140,7 +136,6 @@ const FEATURE_CONFIG: Record<string, {
       'Getestet & funktioniert',
     ],
     icon: Rocket,
-    stat: { value: '+20 Punkte', label: 'Score-Verbesserung möglich' },
   },
   pdfReport: {
     title: 'PDF Reports freischalten',
@@ -160,11 +155,10 @@ const FEATURE_CONFIG: Record<string, {
     benefits: [
       'Vorher/Nachher Prognose',
       'Priorisiere die richtigen Fixes',
-      'ROI-Berechnung',
+      'Impact pro Fix sehen',
       'Zeitersparnis durch Fokus',
     ],
     icon: TrendingUp,
-    stat: { value: '+35 Punkte', label: 'durchschnittliche Verbesserung' },
   },
   pdfWhiteLabel: {
     title: 'White-Label Reports freischalten',
@@ -173,10 +167,9 @@ const FEATURE_CONFIG: Record<string, {
       'Kein ThemeMetrics Logo',
       'Professioneller für Kunden',
       'Als eigener Service verkaufen',
-      'Höhere Margen möglich',
+      'Eigenes Branding möglich',
     ],
     icon: Sparkles,
-    stat: { value: '€500+', label: 'mehr Umsatz pro Kunde' },
   },
   desktopPerformance: {
     title: 'Desktop-Analyse freischalten',
@@ -184,11 +177,10 @@ const FEATURE_CONFIG: Record<string, {
     benefits: [
       'Desktop Core Web Vitals',
       'Vollständiges Performance-Bild',
-      '40% deiner Kunden sind Desktop',
+      'Mobile + Desktop Vergleich',
       'Separate Optimierungen',
     ],
     icon: Zap,
-    stat: { value: '40%', label: 'der Käufe von Desktop' },
   },
   // Agency Features (Pro → Agency)
   apiAccess: {
@@ -201,7 +193,6 @@ const FEATURE_CONFIG: Record<string, {
       'Webhooks für Updates',
     ],
     icon: Rocket,
-    stat: { value: '∞', label: 'Automatisierung möglich' },
   },
   batchAnalysis: {
     title: 'Batch-Analyse freischalten',
@@ -210,34 +201,32 @@ const FEATURE_CONFIG: Record<string, {
       'Mehrere Shops gleichzeitig',
       'Bulk-Export der Ergebnisse',
       'Vergleichsreports',
-      'Massive Zeitersparnis',
+      'Zeitersparnis für Agenturen',
     ],
     icon: Zap,
-    stat: { value: '10x', label: 'schnellere Workflows' },
   },
   clientDashboard: {
     title: 'Client Dashboard freischalten',
     description: 'Gib deinen Kunden Zugang zu einem eigenen Dashboard mit ihren Reports.',
     benefits: [
-      'Branded Client Portal',
+      'Separates Client Portal',
       'Automatische Report-Zustellung',
       'Kunden-Login',
       'Professioneller Service',
     ],
     icon: Crown,
-    stat: { value: '+€200', label: 'mehr pro Kunde möglich' },
   },
   teamMembers: {
     title: 'Team-Zugang freischalten',
     description: 'Lade dein Team ein und arbeitet gemeinsam an Shop-Optimierungen.',
     benefits: [
       'Bis zu 5 Team-Mitglieder',
-      'Rollen & Berechtigungen',
+      'Gemeinsamer Zugang',
       'Team-Collaboration',
-      'Aufgaben-Zuweisung',
+      'Zentrale Verwaltung',
     ],
     icon: Crown,
-    stat: { value: '5x', label: 'mehr Kapazität' },
+    stat: { value: '5', label: 'Team-Mitglieder' },
   },
   workspaces: {
     title: 'Multi-Shop Workspaces freischalten',
@@ -249,7 +238,7 @@ const FEATURE_CONFIG: Record<string, {
       'Perfekt für Agenturen',
     ],
     icon: Crown,
-    stat: { value: '10', label: 'Shops verwalten' },
+    stat: { value: '10', label: 'Shops' },
   },
   unlimitedHistory: {
     title: 'Unbegrenzte Historie freischalten',
@@ -261,7 +250,6 @@ const FEATURE_CONFIG: Record<string, {
       'Historische Vergleiche',
     ],
     icon: TrendingUp,
-    stat: { value: '∞', label: 'Monate Historie' },
   },
   // Combined Agency feature for Agency page
   agency: {
@@ -274,7 +262,6 @@ const FEATURE_CONFIG: Record<string, {
       'Batch-Analyse & API-Zugang',
     ],
     icon: Crown,
-    stat: { value: '€2.000+', label: 'mehr Umsatz/Monat möglich' },
   },
 };
 
@@ -389,15 +376,8 @@ export function UpgradeGate({
                   Sichere Zahlung
                 </span>
                 <span>•</span>
-                <span>Keine Kreditkarte für Trial</span>
+                <span>Jederzeit kündbar</span>
               </div>
-            </div>
-
-            {/* Social Proof */}
-            <div className="bg-secondary/30 px-6 py-4 border-t border-border">
-              <p className="text-center text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">500+</span> Shopify Shops vertrauen bereits auf ThemeMetrics
-              </p>
             </div>
           </div>
 
