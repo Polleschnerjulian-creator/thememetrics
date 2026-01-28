@@ -134,8 +134,16 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthRes
     }
   }
 
-  // NOTE: Query parameter fallback removed for security reasons
-  // All API calls must use session token, header, or cookie authentication
+  // 4. Try query parameter (fallback for embedded app initial load)
+  if (!shop) {
+    const url = new URL(request.url);
+    const shopParam = url.searchParams.get('shop');
+
+    if (shopParam && isValidShopDomain(shopParam)) {
+      shop = sanitizeShopDomain(shopParam);
+      authMethod = 'header';
+    }
+  }
 
   if (!shop) {
     return {
