@@ -22,7 +22,11 @@ export default function RootLayout({
     <html lang="de" suppressHydrationWarning>
       <head>
         {/* App Bridge MUST be the first script, without async/defer */}
-        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+        {/* The API key is required for App Bridge to initialize properly */}
+        <script 
+          src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
+          data-api-key={process.env.NEXT_PUBLIC_SHOPIFY_API_KEY}
+        ></script>
       </head>
       <body className={inter.className}>
         <ThemeProvider>

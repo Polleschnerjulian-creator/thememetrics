@@ -1,10 +1,14 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 
 // Base URL for API requests - must be absolute for embedded apps
-const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.thememetrics.de';
+// IMPORTANT: This must match your Shopify App URL exactly
+const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://thememetrics.de';
+
+// Debug logging
+const DEBUG = process.env.NODE_ENV === 'development' || true;
 
 interface AppBridgeContextType {
   isEmbedded: boolean;
@@ -86,18 +90,24 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
   const [shop, setShop] = useState<string | null>(null);
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const tokenCacheRef = useRef<{ token: string; expiry: number } | null>(null);
 
   useEffect(() => {
     // Check if we're in an iframe (embedded in Shopify Admin)
     const inIframe = typeof window !== 'undefined' && window !== window.parent;
     setIsEmbedded(inIframe);
     
+    if (DEBUG) {
+      console.log('[AppBridge] Embedded:', inIframe);
+      console.log('[AppBridge] API_BASE_URL:', API_BASE_URL);
+    }
+    
     // Get shop domain
     const shopFromParams = searchParams.get('shop');
     const detectedShop = shopFromParams || getShopDomain();
     if (detectedShop) {
       setShop(detectedShop);
-      console.log('Shop detected:', detectedShop);
+      console.log('Shop detected:', '-', `"${detectedShop}"`);
     } else {
       console.log('No shop detected');
     }
@@ -105,10 +115,19 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
     // Check if App Bridge is ready
     const checkReady = () => {
       const shopify = (window as any).shopify;
-      if (shopify && typeof shopify.idToken === 'function') {
-        console.log('App Bridge ready - window.shopify.idToken available');
-        setIsReady(true);
-        return true;
+      if (shopify) {
+        // Check for idToken function (new App Bridge)
+        if (typeof shopify.idToken === 'function') {
+          console.log('App Bridge ready - window.shopify.idToken available');
+          setIsReady(true);
+          return true;
+        }
+        // Check for legacy getIdToken
+        if (typeof shopify.getIdToken === 'function') {
+          console.log('App Bridge ready - window.shopify.getIdToken available (legacy)');
+          setIsReady(true);
+          return true;
+        }
       }
       return false;
     };
@@ -116,43 +135,75 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
     // Check immediately
     if (checkReady()) return;
     
-    // Poll for App Bridge
+    // Poll for App Bridge with exponential backoff
+    let attempts = 0;
+    const maxAttempts = 50; // 5 seconds total
+    
     const interval = setInterval(() => {
+      attempts++;
       if (checkReady()) {
         clearInterval(interval);
+      } else if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        console.warn('App Bridge timeout - proceeding without session tokens');
+        console.log('[AppBridge] window.shopify state:', typeof (window as any).shopify);
+        setIsReady(true);
       }
     }, 100);
     
-    // Timeout after 5 seconds - set ready anyway to allow fallback
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-      console.log('App Bridge timeout - proceeding without session tokens');
-      setIsReady(true);
-    }, 5000);
-    
     return () => {
       clearInterval(interval);
-      clearTimeout(timeout);
     };
   }, [searchParams]);
 
-  // Get session token from App Bridge
+  // Get session token from App Bridge with caching
   const getSessionToken = useCallback(async (): Promise<string | null> => {
     if (typeof window === 'undefined') return null;
     
+    // Check cache first (tokens are valid for a short time)
+    const now = Date.now();
+    if (tokenCacheRef.current && tokenCacheRef.current.expiry > now) {
+      if (DEBUG) console.log('[AppBridge] Using cached token');
+      return tokenCacheRef.current.token;
+    }
+    
     const shopifyGlobal = (window as any).shopify;
     
-    if (shopifyGlobal && typeof shopifyGlobal.idToken === 'function') {
+    if (!shopifyGlobal) {
+      console.log('[AppBridge] window.shopify not available');
+      return null;
+    }
+    
+    // Try new App Bridge idToken() method
+    if (typeof shopifyGlobal.idToken === 'function') {
       try {
         const token = await shopifyGlobal.idToken();
-        console.log('Session token retrieved');
-        return token;
+        if (token) {
+          console.log('Session token retrieved');
+          // Cache token for 50 seconds (tokens typically valid for 60s)
+          tokenCacheRef.current = { token, expiry: now + 50000 };
+          return token;
+        }
       } catch (error) {
-        console.error('Failed to get session token:', error);
-        return null;
+        console.error('Failed to get session token via idToken():', error);
       }
     }
     
+    // Try legacy getIdToken() method
+    if (typeof shopifyGlobal.getIdToken === 'function') {
+      try {
+        const token = await shopifyGlobal.getIdToken();
+        if (token) {
+          console.log('Session token retrieved (legacy method)');
+          tokenCacheRef.current = { token, expiry: now + 50000 };
+          return token;
+        }
+      } catch (error) {
+        console.error('Failed to get session token via getIdToken():', error);
+      }
+    }
+    
+    console.log('[AppBridge] No token method available or token retrieval failed');
     return null;
   }, []);
 
@@ -160,25 +211,40 @@ export function AppBridgeProvider({ children }: AppBridgeProviderProps) {
   const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
     // Convert to absolute URL for embedded apps
     const absoluteUrl = toAbsoluteUrl(url);
-    console.log('authenticatedFetch:', absoluteUrl);
+    console.log('authenticatedFetch:', '-', `"${absoluteUrl}"`);
     
     const token = await getSessionToken();
     
     const headers = new Headers(options.headers);
+    
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
       console.log('Added Authorization header');
+    } else {
+      console.log('[AppBridge] No session token - request will use fallback auth');
     }
     
     // Add shop header from state or try to detect again
     const currentShop = shop || getShopDomain();
     if (currentShop) {
       headers.set('X-Shop-Domain', currentShop);
+      if (DEBUG) console.log('[AppBridge] Added X-Shop-Domain:', currentShop);
+    }
+    
+    // Important: Set content-type for JSON requests
+    if (options.body && typeof options.body === 'string') {
+      try {
+        JSON.parse(options.body);
+        headers.set('Content-Type', 'application/json');
+      } catch (e) {
+        // Not JSON, skip
+      }
     }
     
     return fetch(absoluteUrl, {
       ...options,
       headers,
+      credentials: 'include', // Include cookies as fallback
     });
   }, [getSessionToken, shop]);
 
