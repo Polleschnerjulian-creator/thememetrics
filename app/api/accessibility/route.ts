@@ -8,7 +8,12 @@ import {
   SectionAccessibility,
 } from '@/lib/accessibility';
 import { captureError, measureAsync } from '@/lib/monitoring';
-import { authenticateRequest, authErrorResponse } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, handleOptions, withCors } from '@/lib/auth';
+
+// Handle CORS preflight
+export async function OPTIONS() {
+  return handleOptions();
+}
 
 async function runAccessibilityCheck(request: NextRequest): Promise<NextResponse> {
   // Authenticate using session token or cookie fallback
@@ -108,18 +113,20 @@ async function runAccessibilityCheck(request: NextRequest): Promise<NextResponse
 
 export async function GET(request: NextRequest) {
   try {
-    return await measureAsync('accessibility-check', () => runAccessibilityCheck(request));
+    const response = await measureAsync('accessibility-check', () => runAccessibilityCheck(request));
+    return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'accessibility', method: 'GET' } });
-    return NextResponse.json({ error: 'Failed to check accessibility' }, { status: 500 });
+    return withCors(NextResponse.json({ error: 'Failed to check accessibility' }, { status: 500 }));
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    return await measureAsync('accessibility-check-post', () => runAccessibilityCheck(request));
+    const response = await measureAsync('accessibility-check-post', () => runAccessibilityCheck(request));
+    return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'accessibility', method: 'POST' } });
-    return NextResponse.json({ error: 'Failed to check accessibility' }, { status: 500 });
+    return withCors(NextResponse.json({ error: 'Failed to check accessibility' }, { status: 500 }));
   }
 }

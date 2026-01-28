@@ -10,7 +10,12 @@ import {
   SectionImageAnalysis,
 } from '@/lib/image-optimizer';
 import { captureError, measureAsync } from '@/lib/monitoring';
-import { authenticateRequest, authErrorResponse } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, handleOptions, withCors } from '@/lib/auth';
+
+// Handle CORS preflight
+export async function OPTIONS() {
+  return handleOptions();
+}
 
 // Cache duration: 1 hour
 const CACHE_DURATION_MS = 60 * 60 * 1000;
@@ -159,22 +164,24 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const refresh = searchParams.get('refresh') === 'true';
     
-    return await measureAsync('image-analysis', () => 
+    const response = await measureAsync('image-analysis', () => 
       getOrCreateImageAnalysis(request, refresh)
     );
+    return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'images', method: 'GET' } });
-    return NextResponse.json({ error: 'Failed to analyze images' }, { status: 500 });
+    return withCors(NextResponse.json({ error: 'Failed to analyze images' }, { status: 500 }));
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    return await measureAsync('image-analysis-post', () => 
+    const response = await measureAsync('image-analysis-post', () => 
       getOrCreateImageAnalysis(request, true)
     );
+    return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'images', method: 'POST' } });
-    return NextResponse.json({ error: 'Failed to analyze images' }, { status: 500 });
+    return withCors(NextResponse.json({ error: 'Failed to analyze images' }, { status: 500 }));
   }
 }

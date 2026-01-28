@@ -14,7 +14,12 @@ import { captureError, captureMessage, measureAsync, setUserContext } from '@/li
 import { sendEmail } from '@/lib/email/resend';
 import { analysisCompleteEmail } from '@/lib/email/templates';
 import { emailSubscriptions } from '@/lib/db/schema';
-import { authenticateRequest, authErrorResponse } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, handleOptions, withCors } from '@/lib/auth';
+
+// Handle CORS preflight
+export async function OPTIONS() {
+  return handleOptions();
+}
 
 // Get current month in format '2026-01'
 function getCurrentMonth(): string {
@@ -427,10 +432,11 @@ async function runAnalysis(request: NextRequest, bodyShop?: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    return await measureAsync('analyze-theme-get', () => runAnalysis(request));
+    const response = await measureAsync('analyze-theme-get', () => runAnalysis(request));
+    return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'themes/analyze', method: 'GET' } });
-    return NextResponse.json({ error: 'Failed to analyze theme' }, { status: 500 });
+    return withCors(NextResponse.json({ error: 'Failed to analyze theme' }, { status: 500 }));
   }
 }
 
@@ -440,12 +446,13 @@ export async function POST(request: NextRequest) {
     
     // Validate input
     if (body.shop && !isValidShopDomain(body.shop)) {
-      return NextResponse.json({ error: 'Invalid shop domain' }, { status: 400 });
+      return withCors(NextResponse.json({ error: 'Invalid shop domain' }, { status: 400 }));
     }
     
-    return await measureAsync('analyze-theme-post', () => runAnalysis(request, body.shop));
+    const response = await measureAsync('analyze-theme-post', () => runAnalysis(request, body.shop));
+    return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'themes/analyze', method: 'POST' } });
-    return NextResponse.json({ error: 'Failed to analyze theme' }, { status: 500 });
+    return withCors(NextResponse.json({ error: 'Failed to analyze theme' }, { status: 500 }));
   }
 }

@@ -4,7 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { PLANS, PlanId, canPerformAction } from '@/lib/billing';
-import { authenticateRequest } from '@/lib/auth';
+import { authenticateRequest, handleOptions, withCors } from '@/lib/auth';
+
+// Handle CORS preflight
+export async function OPTIONS() {
+  return handleOptions();
+}
 
 interface PageSpeedResponse {
   lighthouseResult: {
@@ -93,7 +98,7 @@ export async function GET(request: NextRequest) {
     const authResult = await authenticateRequest(request);
     
     if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
     }
     
     const { store } = authResult;
@@ -105,14 +110,14 @@ export async function GET(request: NextRequest) {
     });
     
     if (!latestAnalysis || !latestAnalysis.lcpMs) {
-      return NextResponse.json({ 
+      return withCors(NextResponse.json({ 
         hasData: false,
         message: 'No performance data available. Run a theme analysis first.'
-      });
+      }));
     }
     
     // Return cached performance data from theme analysis
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       hasData: true,
       mobile: {
         performance: latestAnalysis.overallScore,
@@ -122,10 +127,10 @@ export async function GET(request: NextRequest) {
         fcp: latestAnalysis.fcpMs,
       },
       analyzedAt: latestAnalysis.analyzedAt,
-    });
+    }));
   } catch (error) {
     console.error('Performance GET error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return withCors(NextResponse.json({ error: 'Internal server error' }, { status: 500 }));
   }
 }
 
@@ -269,9 +274,9 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     };
 
-    return NextResponse.json(result);
+    return withCors(NextResponse.json(result));
   } catch (error) {
     console.error('Performance API error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return withCors(NextResponse.json({ error: 'Internal server error' }, { status: 500 }));
   }
 }
