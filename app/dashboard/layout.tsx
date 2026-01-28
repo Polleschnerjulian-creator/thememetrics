@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { useShop } from '@/hooks/useShop';
 import { OnboardingProvider, AppTour } from '@/components/onboarding';
 import { PlanProvider } from '@/hooks/usePlan';
+import { StoreGuard } from '@/components/StoreGuard';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', labelEn: 'Dashboard', icon: LayoutDashboard },
@@ -105,7 +106,9 @@ export default function DashboardLayout({
           {/* Main Content */}
           <main className="pl-64">
             <div className="min-h-screen p-8">
-              {children}
+              <StoreGuard>
+                {children}
+              </StoreGuard>
             </div>
           </main>
 
