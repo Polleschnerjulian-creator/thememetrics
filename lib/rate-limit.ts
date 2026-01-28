@@ -3,6 +3,7 @@
  * Schützt vor API-Missbrauch und Kostenexplosion
  */
 
+import { NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, and, gte } from 'drizzle-orm';
 
@@ -164,18 +165,17 @@ export async function checkDailyPerformanceLimit(
 /**
  * Rate limit response helper
  */
-export function rateLimitResponse(resetIn: number) {
+export function rateLimitResponse(resetIn: number): NextResponse {
   const retryAfter = Math.ceil(resetIn / 1000);
-  return new Response(
-    JSON.stringify({
+  return NextResponse.json(
+    {
       error: 'rate_limit_exceeded',
       message: 'Zu viele Anfragen. Bitte warte einen Moment.',
       retryAfter,
-    }),
+    },
     {
       status: 429,
       headers: {
-        'Content-Type': 'application/json',
         'Retry-After': String(retryAfter),
         'X-RateLimit-Reset': String(Date.now() + resetIn),
       },
