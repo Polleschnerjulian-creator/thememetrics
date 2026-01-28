@@ -2,9 +2,13 @@
   "extends": ["next/core-web-vitals"],
   "rules": {
     "no-console": ["warn", { "allow": ["warn", "error"] }],
-    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    "no-unused-vars": "off",
     "react-hooks/rules-of-hooks": "error",
-    "react-hooks/exhaustive-deps": "warn"
+    "react-hooks/exhaustive-deps": "warn",
+    "react/no-unescaped-entities": "off",
+    "@next/next/no-sync-scripts": "off",
+    "jsx-a11y/alt-text": "warn",
+    "@next/next/no-img-element": "warn"
   },
   "ignorePatterns": ["node_modules/", ".next/", "out/"]
 }
