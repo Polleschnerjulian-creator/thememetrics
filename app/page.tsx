@@ -159,15 +159,16 @@ function SpeedCheckModal({
             <p className="text-sm text-slate-400 text-center">
               Mit ThemeMetrics findest du <strong className="text-white">genau welche Theme-Sections</strong> diese Probleme verursachen.
             </p>
-            <a
-              href="/api/auth/install"
+            <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 text-center">
+              <p className="text-indigo-300 font-medium mb-1">Die App ist bald im Shopify App Store verfügbar!</p>
+              <p className="text-sm text-slate-400">Du wirst per E-Mail benachrichtigt, sobald es losgeht.</p>
+            </div>
+            <button
+              onClick={() => { onClose(); document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' }); }}
               className="block w-full py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-semibold text-center transition-colors"
             >
-              Vollständige Analyse starten →
-            </a>
-            <p className="text-xs text-slate-500 text-center">
-              ✓ Kostenlos • ✓ Keine Kreditkarte nötig
-            </p>
+              Auf die Waitlist setzen →
+            </button>
           </div>
         </div>
       </div>
@@ -176,9 +177,6 @@ function SpeedCheckModal({
 }
 
 function LandingPageContent() {
-  const [shop, setShop] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   
@@ -190,7 +188,13 @@ function LandingPageContent() {
   const [speedReport, setSpeedReport] = useState<SpeedReport | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [speedCheckSuccess, setSpeedCheckSuccess] = useState(false);
-  
+
+  // Waitlist State
+  const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
+  const [waitlistError, setWaitlistError] = useState('');
+  const [waitlistSuccess, setWaitlistSuccess] = useState(false);
+
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -204,23 +208,6 @@ function LandingPageContent() {
       setIsCheckingAuth(false);
     }
   }, [searchParams, router]);
-
-  const handleInstall = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (!shop.trim()) {
-      setError('Bitte gib deine Shop-Domain ein');
-      return;
-    }
-
-    setIsLoading(true);
-    let shopDomain = shop.trim().toLowerCase();
-    if (!shopDomain.includes('.myshopify.com')) {
-      shopDomain = shopDomain.replace('.myshopify.com', '');
-    }
-    window.location.href = `/api/auth/install?shop=${encodeURIComponent(shopDomain)}`;
-  };
 
   const handleSpeedCheck = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -270,6 +257,38 @@ function LandingPageContent() {
       setSpeedCheckError('Netzwerkfehler. Bitte versuche es erneut.');
     } finally {
       setSpeedCheckLoading(false);
+    }
+  };
+
+  const handleWaitlist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWaitlistError('');
+
+    if (!waitlistEmail.trim() || !waitlistEmail.includes('@')) {
+      setWaitlistError('Bitte gib eine gültige E-Mail ein');
+      return;
+    }
+
+    setWaitlistLoading(true);
+    try {
+      const response = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: waitlistEmail,
+          shopUrl: 'waitlist',
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setWaitlistSuccess(true);
+      } else {
+        setWaitlistError(data.error || 'Ein Fehler ist aufgetreten');
+      }
+    } catch {
+      setWaitlistError('Netzwerkfehler. Bitte versuche es erneut.');
+    } finally {
+      setWaitlistLoading(false);
     }
   };
 
@@ -414,10 +433,10 @@ function LandingPageContent() {
               Kostenloser Speed Check
             </button>
             <button 
-              onClick={() => document.getElementById('hero-form')?.scrollIntoView({ behavior: 'smooth' })}
+              onClick={() => document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' })}
               className="px-8 py-4 bg-slate-800 hover:bg-slate-700 rounded-xl font-semibold transition-all flex items-center gap-2"
             >
-              App installieren
+              Auf die Waitlist
               <ArrowRight className="w-5 h-5" />
             </button>
           </div>
@@ -466,14 +485,14 @@ function LandingPageContent() {
                       <strong>Kein Problem:</strong> Wir haben deine E-Mail gespeichert und senden dir bald Performance-Tipps!
                     </p>
                     <a
-                      href="#hero-form"
+                      href="#waitlist"
                       onClick={(e) => {
                         e.preventDefault();
-                        document.getElementById('hero-form')?.scrollIntoView({ behavior: 'smooth' });
+                        document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' });
                       }}
                       className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium inline-block"
                     >
-                      Für vollständige Analyse → App installieren
+                      Auf die Waitlist setzen →
                     </a>
                   </>
                 )}
@@ -727,25 +746,39 @@ function LandingPageContent() {
         </div>
       </section>
 
-      {/* App Install CTA */}
-      <section id="hero-form" className="py-20 px-6">
+      {/* Waitlist CTA */}
+      <section id="waitlist" className="py-20 px-6">
         <div className="max-w-xl mx-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">App installieren</h2>
-            <p className="text-slate-400 mb-6">Für die vollständige Section-Level Analyse installiere die Shopify App.</p>
-            <form onSubmit={handleInstall} className="space-y-4">
-              <div className="relative">
-                <input type="text" placeholder="dein-shop" value={shop} onChange={(e) => setShop(e.target.value)}
-                  className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:border-indigo-500 text-white placeholder-slate-500" />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">.myshopify.com</span>
+            <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-4 py-2 rounded-full text-sm font-medium mb-4">
+              <Rocket className="w-4 h-4" />
+              Coming Soon im Shopify App Store
+            </div>
+            <h2 className="text-2xl font-bold mb-4">Auf die Waitlist setzen</h2>
+            <p className="text-slate-400 mb-6">Die App wird gerade von Shopify geprüft. Trag dich ein und wir benachrichtigen dich, sobald sie verfügbar ist.</p>
+            {waitlistSuccess ? (
+              <div className="py-4">
+                <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
+                <p className="text-lg font-semibold text-white mb-1">Du bist auf der Waitlist!</p>
+                <p className="text-slate-400 text-sm">Wir melden uns per E-Mail, sobald die App live ist.</p>
               </div>
-              {error && <p className="text-red-400 text-sm">{error}</p>}
-              <button type="submit" disabled={isLoading}
-                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                {isLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <>App installieren <ArrowRight className="w-5 h-5" /></>}
-              </button>
-            </form>
-            <p className="text-slate-500 text-sm mt-4">✓ Kostenlos starten • ✓ Keine Kreditkarte</p>
+            ) : (
+              <form onSubmit={handleWaitlist} className="space-y-4">
+                <input
+                  type="email"
+                  placeholder="deine@email.de"
+                  value={waitlistEmail}
+                  onChange={(e) => setWaitlistEmail(e.target.value)}
+                  className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:border-indigo-500 text-white placeholder-slate-500"
+                />
+                {waitlistError && <p className="text-red-400 text-sm">{waitlistError}</p>}
+                <button type="submit" disabled={waitlistLoading}
+                  className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                  {waitlistLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <>Benachrichtigt werden <ArrowRight className="w-5 h-5" /></>}
+                </button>
+              </form>
+            )}
+            <p className="text-slate-500 text-sm mt-4">Kein Spam. Nur eine E-Mail wenn die App live geht.</p>
           </div>
         </div>
       </section>
@@ -782,7 +815,7 @@ function LandingPageContent() {
                       </li>
                     ))}
                   </ul>
-                  <button onClick={() => document.getElementById('hero-form')?.scrollIntoView({ behavior: 'smooth' })}
+                  <button onClick={() => document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' })}
                     className={`w-full py-3 px-4 rounded-xl font-medium transition-colors ${plan.popular ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'}`}>
                     {plan.cta}
                   </button>
@@ -821,14 +854,25 @@ function LandingPageContent() {
             e.preventDefault();
             const form = e.target as HTMLFormElement;
             const emailInput = form.querySelector('input[type="email"]') as HTMLInputElement;
+            const btn = form.querySelector('button') as HTMLButtonElement;
             if (emailInput.value) {
-              await fetch(`/api/leads?email=${encodeURIComponent(emailInput.value)}&source=newsletter`);
-              emailInput.value = '';
-              alert('Erfolgreich angemeldet!');
+              btn.disabled = true;
+              try {
+                await fetch('/api/leads', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email: emailInput.value, shopUrl: 'newsletter' }),
+                });
+                emailInput.value = '';
+                btn.textContent = 'Angemeldet!';
+                btn.className = 'px-6 py-3 bg-emerald-600 rounded-xl font-medium';
+              } catch {
+                btn.disabled = false;
+              }
             }
           }}>
             <input type="email" placeholder="deine@email.de" className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:border-indigo-500 text-white placeholder-slate-500" />
-            <button type="submit" className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium">
+            <button type="submit" className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium transition-colors">
               Anmelden
             </button>
           </form>
@@ -840,15 +884,15 @@ function LandingPageContent() {
         <div className="max-w-4xl mx-auto">
           <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-3xl p-12 text-center">
             <h2 className="text-4xl font-bold mb-4">Bereit deinen Shop zu optimieren?</h2>
-            <p className="text-lg text-indigo-100 mb-8 max-w-2xl mx-auto">Starte mit dem kostenlosen Speed Check oder installiere die App für die vollständige Analyse.</p>
+            <p className="text-lg text-indigo-100 mb-8 max-w-2xl mx-auto">Starte mit dem kostenlosen Speed Check oder setz dich auf die Waitlist für die vollständige Analyse.</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button onClick={() => document.getElementById('speed-check')?.scrollIntoView({ behavior: 'smooth' })}
                 className="px-8 py-4 bg-white text-indigo-600 rounded-xl font-semibold hover:bg-indigo-50 transition-colors inline-flex items-center gap-2">
                 <Gauge className="w-5 h-5" /> Kostenloser Speed Check
               </button>
-              <button onClick={() => document.getElementById('hero-form')?.scrollIntoView({ behavior: 'smooth' })}
+              <button onClick={() => document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' })}
                 className="px-8 py-4 bg-indigo-500 hover:bg-indigo-400 rounded-xl font-semibold transition-colors inline-flex items-center gap-2">
-                App installieren <ArrowRight className="w-5 h-5" />
+                Auf die Waitlist <ArrowRight className="w-5 h-5" />
               </button>
             </div>
           </div>
