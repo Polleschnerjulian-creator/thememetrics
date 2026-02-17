@@ -68,8 +68,8 @@ function SpeedCheckModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <div className="glass-prominent relative rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto glass-specular">
         <div className="p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -110,25 +110,25 @@ function SpeedCheckModal({
 
           {/* Core Web Vitals */}
           <div className="grid grid-cols-2 gap-3 mb-6">
-            <div className="bg-slate-800 rounded-lg p-3">
+            <div className="glass-light rounded-xl p-3">
               <p className="text-xs text-slate-500 mb-1">LCP</p>
               <p className={`text-lg font-bold ${report.lcp < 2500 ? 'text-emerald-400' : report.lcp < 4000 ? 'text-amber-400' : 'text-red-400'}`}>
                 {(report.lcp / 1000).toFixed(1)}s
               </p>
             </div>
-            <div className="bg-slate-800 rounded-lg p-3">
+            <div className="glass-light rounded-xl p-3">
               <p className="text-xs text-slate-500 mb-1">FCP</p>
               <p className={`text-lg font-bold ${report.fcp < 1800 ? 'text-emerald-400' : report.fcp < 3000 ? 'text-amber-400' : 'text-red-400'}`}>
                 {(report.fcp / 1000).toFixed(1)}s
               </p>
             </div>
-            <div className="bg-slate-800 rounded-lg p-3">
+            <div className="glass-light rounded-xl p-3">
               <p className="text-xs text-slate-500 mb-1">CLS</p>
               <p className={`text-lg font-bold ${report.cls < 0.1 ? 'text-emerald-400' : report.cls < 0.25 ? 'text-amber-400' : 'text-red-400'}`}>
                 {report.cls}
               </p>
             </div>
-            <div className="bg-slate-800 rounded-lg p-3">
+            <div className="glass-light rounded-xl p-3">
               <p className="text-xs text-slate-500 mb-1">TBT</p>
               <p className={`text-lg font-bold ${report.tbt < 300 ? 'text-emerald-400' : report.tbt < 600 ? 'text-amber-400' : 'text-red-400'}`}>
                 {report.tbt}ms
@@ -369,12 +369,19 @@ function LandingPageContent() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-[#050510] text-white overflow-hidden">
+      {/* Animated Background Blobs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="blob blob-1" style={{ top: '-10%', left: '-5%' }} />
+        <div className="blob blob-2" style={{ top: '30%', right: '-10%' }} />
+        <div className="blob blob-3" style={{ bottom: '10%', left: '20%' }} />
+      </div>
+
       {/* Speed Check Modal */}
       <SpeedCheckModal isOpen={showModal} onClose={() => setShowModal(false)} report={speedReport} />
 
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/50">
+      <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Logo size={40} showText={true} className="text-white" />
           <nav className="hidden md:flex items-center gap-8">
@@ -384,7 +391,7 @@ function LandingPageContent() {
             <a href="#faq" className="text-sm text-slate-400 hover:text-white transition-colors">FAQ</a>
           </nav>
           <button onClick={() => document.getElementById('speed-check')?.scrollIntoView({ behavior: 'smooth' })}
-            className="hidden md:block px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
+            className="hidden md:block px-4 py-2 glass-btn rounded-xl text-sm font-medium">
             Kostenloser Speed Check
           </button>
         </div>
@@ -393,7 +400,7 @@ function LandingPageContent() {
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-6">
         <div className="max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-4 py-2 rounded-full text-sm font-medium mb-8">
+          <div className="inline-flex items-center gap-2 glass-badge text-indigo-300 px-5 py-2.5 rounded-full text-sm font-medium mb-8">
             <Sparkles className="w-4 h-4" />
             Das All-in-One Tool für Shopify Theme Performance
           </div>
@@ -427,14 +434,14 @@ function LandingPageContent() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button 
               onClick={() => document.getElementById('speed-check')?.scrollIntoView({ behavior: 'smooth' })}
-              className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl font-semibold transition-all flex items-center gap-2"
+              className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-2xl font-semibold transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5"
             >
               <Gauge className="w-5 h-5" />
               Kostenloser Speed Check
             </button>
-            <button 
+            <button
               onClick={() => document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' })}
-              className="px-8 py-4 bg-slate-800 hover:bg-slate-700 rounded-xl font-semibold transition-all flex items-center gap-2"
+              className="px-8 py-4 glass-btn rounded-2xl font-semibold flex items-center gap-2"
             >
               Auf die Waitlist
               <ArrowRight className="w-5 h-5" />
@@ -444,12 +451,12 @@ function LandingPageContent() {
       </section>
 
       {/* SPEED CHECK SECTION - Main Lead Magnet */}
-      <section id="speed-check" className="py-20 px-6 bg-gradient-to-b from-indigo-950/50 to-slate-950">
+      <section id="speed-check" className="py-20 px-6 relative">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-4 py-2 rounded-full text-sm font-medium mb-6">
+            <div className="inline-flex items-center gap-2 glass-badge text-amber-300 px-5 py-2.5 rounded-full text-sm font-medium mb-6">
               <Gauge className="w-4 h-4" />
-              Kostenlos • Keine Anmeldung nötig
+              Kostenlos &bull; Keine Anmeldung nötig
             </div>
             <h2 className="text-4xl font-bold mb-4">Wie schnell ist dein Shop wirklich?</h2>
             <p className="text-slate-400 text-lg max-w-2xl mx-auto">
@@ -458,7 +465,7 @@ function LandingPageContent() {
             </p>
           </div>
 
-          <div className="bg-slate-900/80 border border-slate-700 rounded-2xl p-8">
+          <div className="glass-prominent relative rounded-3xl p-8 glass-specular">
             {speedCheckSuccess ? (
               <div className="text-center py-8">
                 <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -507,7 +514,7 @@ function LandingPageContent() {
                       placeholder="dein-shop.myshopify.com"
                       value={speedCheckUrl}
                       onChange={(e) => setSpeedCheckUrl(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:border-indigo-500 text-white placeholder-slate-500"
+                      className="w-full px-4 py-3 glass-input rounded-xl text-white placeholder-slate-500 outline-none"
                     />
                   </div>
                   <div>
@@ -517,7 +524,7 @@ function LandingPageContent() {
                       placeholder="du@beispiel.de"
                       value={speedCheckEmail}
                       onChange={(e) => setSpeedCheckEmail(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:border-indigo-500 text-white placeholder-slate-500"
+                      className="w-full px-4 py-3 glass-input rounded-xl text-white placeholder-slate-500 outline-none"
                     />
                   </div>
                 </div>
@@ -554,22 +561,22 @@ function LandingPageContent() {
 
           {/* What you get */}
           <div className="grid md:grid-cols-3 gap-6 mt-8">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
+            <div className="text-center glass rounded-2xl p-6">
+              <div className="w-12 h-12 glass-light rounded-xl flex items-center justify-center mx-auto mb-3">
                 <Gauge className="w-6 h-6 text-indigo-400" />
               </div>
               <h3 className="font-semibold mb-1">Performance Score</h3>
               <p className="text-sm text-slate-400">0-100 Score basierend auf Core Web Vitals</p>
             </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
+            <div className="text-center glass rounded-2xl p-6">
+              <div className="w-12 h-12 glass-light rounded-xl flex items-center justify-center mx-auto mb-3">
                 <TrendingDown className="w-6 h-6 text-red-400" />
               </div>
               <h3 className="font-semibold mb-1">Umsatzverlust</h3>
               <p className="text-sm text-slate-400">Geschätzter monatlicher Verlust durch Ladezeit</p>
             </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
+            <div className="text-center glass rounded-2xl p-6">
+              <div className="w-12 h-12 glass-light rounded-xl flex items-center justify-center mx-auto mb-3">
                 <AlertTriangle className="w-6 h-6 text-amber-400" />
               </div>
               <h3 className="font-semibold mb-1">Top Probleme</h3>
@@ -580,10 +587,10 @@ function LandingPageContent() {
       </section>
 
       {/* Stats */}
-      <section className="py-16 px-6 border-y border-slate-800">
+      <section className="py-16 px-6 relative">
         <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8">
           {stats.map((stat, i) => (
-            <div key={i} className="text-center">
+            <div key={i} className="text-center glass rounded-2xl p-8">
               <div className="text-5xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent mb-2">{stat.value}</div>
               <div className="text-lg font-semibold text-white mb-1">{stat.label}</div>
               <div className="text-sm text-slate-500">{stat.desc}</div>
@@ -611,7 +618,7 @@ function LandingPageContent() {
                 pink: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
               };
               return (
-                <div key={i} className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition-colors">
+                <div key={i} className="glass rounded-2xl p-6 transition-all duration-300">
                   <div className={`w-12 h-12 rounded-xl ${colorClasses[feature.color]} border flex items-center justify-center mb-4`}>
                     <Icon className="w-6 h-6" />
                   </div>
@@ -625,12 +632,12 @@ function LandingPageContent() {
       </section>
 
       {/* Feature Highlights */}
-      <section className="py-20 px-6 bg-slate-900/50">
+      <section className="py-20 px-6 relative">
         <div className="max-w-6xl mx-auto space-y-24">
           {/* Section Analysis */}
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
-              <div className="inline-flex items-center gap-2 bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-full text-sm font-medium mb-4">
+              <div className="inline-flex items-center gap-2 glass-badge text-indigo-300 px-3 py-1 rounded-full text-sm font-medium mb-4">
                 <Layers className="w-4 h-4" /> Section-Level Analyse
               </div>
               <h3 className="text-3xl font-bold mb-4">Sieh genau welche Section das Problem ist</h3>
@@ -641,10 +648,10 @@ function LandingPageContent() {
                 ))}
               </ul>
             </div>
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+            <div className="glass rounded-2xl p-6">
               <div className="space-y-4">
                 {[{ name: 'Hero Section', score: 45, status: 'critical' }, { name: 'Product Grid', score: 72, status: 'warning' }, { name: 'Footer', score: 89, status: 'good' }].map((section, i) => (
-                  <div key={i} className="bg-slate-900 rounded-xl p-4 flex items-center justify-between">
+                  <div key={i} className="glass-light rounded-xl p-4 flex items-center justify-between">
                     <div><p className="font-medium">{section.name}</p><p className="text-sm text-slate-500">~{Math.round(500 - section.score * 4)}ms Ladezeit</p></div>
                     <div className={`text-2xl font-bold ${section.status === 'critical' ? 'text-red-400' : section.status === 'warning' ? 'text-amber-400' : 'text-emerald-400'}`}>{section.score}</div>
                   </div>
@@ -655,7 +662,7 @@ function LandingPageContent() {
 
           {/* Image Optimization */}
           <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div className="order-2 md:order-1 bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+            <div className="order-2 md:order-1 glass rounded-2xl p-6">
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm"><span className="text-slate-400">Bild-Score</span><span className="text-2xl font-bold text-amber-400">62/100</span></div>
                 <div className="h-2 bg-slate-700 rounded-full overflow-hidden"><div className="h-full w-[62%] bg-gradient-to-r from-amber-500 to-orange-500 rounded-full" /></div>
@@ -667,7 +674,7 @@ function LandingPageContent() {
               </div>
             </div>
             <div className="order-1 md:order-2">
-              <div className="inline-flex items-center gap-2 bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-sm font-medium mb-4">
+              <div className="inline-flex items-center gap-2 glass-badge text-emerald-300 px-3 py-1 rounded-full text-sm font-medium mb-4">
                 <ImageIcon className="w-4 h-4" /> Bildoptimierung
               </div>
               <h3 className="text-3xl font-bold mb-4">Finde jedes unoptimierte Bild</h3>
@@ -683,7 +690,7 @@ function LandingPageContent() {
           {/* Accessibility */}
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
-              <div className="inline-flex items-center gap-2 bg-purple-500/10 text-purple-400 px-3 py-1 rounded-full text-sm font-medium mb-4">
+              <div className="inline-flex items-center gap-2 glass-badge text-purple-300 px-3 py-1 rounded-full text-sm font-medium mb-4">
                 <Accessibility className="w-4 h-4" /> Accessibility Check
               </div>
               <h3 className="text-3xl font-bold mb-4">Mach deinen Shop für alle zugänglich</h3>
@@ -694,7 +701,7 @@ function LandingPageContent() {
                 ))}
               </ul>
             </div>
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+            <div className="glass rounded-2xl p-6">
               <div className="flex items-center justify-between mb-6"><span className="font-medium">Accessibility Score</span><span className="text-3xl font-bold text-purple-400">78/100</span></div>
               <div className="space-y-4">
                 {[{ label: 'Kontraste', value: 85, color: 'emerald' }, { label: 'Alt-Texte', value: 60, color: 'amber' }, { label: 'ARIA Labels', value: 90, color: 'emerald' }, { label: 'Formulare', value: 75, color: 'amber' }].map((item, i) => (
@@ -720,8 +727,8 @@ function LandingPageContent() {
             {[{ step: '1', title: 'App installieren', desc: 'Ein Klick Installation. Keine Konfiguration nötig, kein Code.' },
               { step: '2', title: 'Theme analysieren', desc: 'ThemeMetrics scannt automatisch Sections, Bilder & Accessibility.' },
               { step: '3', title: 'Step-by-Step fixen', desc: 'Folge den Anleitungen im Theme Editor und sieh deinen Score steigen.' }].map((item, i) => (
-              <div key={i} className="text-center">
-                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-2xl font-bold mx-auto mb-4">{item.step}</div>
+              <div key={i} className="text-center glass rounded-2xl p-6">
+                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-2xl font-bold mx-auto mb-4 shadow-lg shadow-indigo-500/30">{item.step}</div>
                 <h3 className="text-xl font-semibold mb-2">{item.title}</h3>
                 <p className="text-slate-400">{item.desc}</p>
               </div>
@@ -731,12 +738,12 @@ function LandingPageContent() {
       </section>
 
       {/* Testimonials */}
-      <section className="py-20 px-6 bg-slate-900/50">
+      <section className="py-20 px-6 relative">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16"><h2 className="text-4xl font-bold mb-4">Was unsere Nutzer sagen</h2></div>
           <div className="grid md:grid-cols-3 gap-6">
             {testimonials.map((t, i) => (
-              <div key={i} className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+              <div key={i} className="glass rounded-2xl p-6 relative glass-specular">
                 <div className="flex gap-1 mb-4">{[1,2,3,4,5].map(j => <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400" />)}</div>
                 <p className="text-slate-300 mb-4">"{t.quote}"</p>
                 <div><p className="font-medium">{t.author}</p><p className="text-sm text-slate-500">{t.role}</p></div>
@@ -749,8 +756,8 @@ function LandingPageContent() {
       {/* Waitlist CTA */}
       <section id="waitlist" className="py-20 px-6">
         <div className="max-w-xl mx-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center">
-            <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-4 py-2 rounded-full text-sm font-medium mb-4">
+          <div className="glass-prominent relative rounded-3xl p-8 text-center glass-specular">
+            <div className="inline-flex items-center gap-2 glass-badge text-amber-300 px-5 py-2.5 rounded-full text-sm font-medium mb-4">
               <Rocket className="w-4 h-4" />
               Coming Soon im Shopify App Store
             </div>
@@ -769,7 +776,7 @@ function LandingPageContent() {
                   placeholder="deine@email.de"
                   value={waitlistEmail}
                   onChange={(e) => setWaitlistEmail(e.target.value)}
-                  className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:border-indigo-500 text-white placeholder-slate-500"
+                  className="w-full px-4 py-4 glass-input rounded-xl text-white placeholder-slate-500 outline-none"
                 />
                 {waitlistError && <p className="text-red-400 text-sm">{waitlistError}</p>}
                 <button type="submit" disabled={waitlistLoading}
@@ -784,7 +791,7 @@ function LandingPageContent() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="py-20 px-6 bg-slate-900/50">
+      <section id="pricing" className="py-20 px-6 relative">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">Einfaches, transparentes Pricing</h2>
@@ -794,7 +801,7 @@ function LandingPageContent() {
             {plans.map((plan) => {
               const Icon = plan.icon;
               return (
-                <div key={plan.id} className={`relative bg-slate-900 rounded-2xl border-2 p-6 ${plan.popular ? 'border-indigo-500 shadow-lg shadow-indigo-500/20' : 'border-slate-800'}`}>
+                <div key={plan.id} className={`relative rounded-2xl p-6 transition-all duration-300 ${plan.popular ? 'glass-prominent border border-indigo-500/30 shadow-lg shadow-indigo-500/20' : 'glass'}`}>
                   {plan.popular && <div className="absolute -top-3 left-1/2 -translate-x-1/2"><span className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-xs font-medium px-3 py-1 rounded-full flex items-center gap-1"><Star className="w-3 h-3" />Beliebt</span></div>}
                   <div className="text-center mb-6">
                     <div className={`w-12 h-12 rounded-xl mx-auto mb-4 flex items-center justify-center ${plan.color === 'slate' ? 'bg-slate-800' : plan.color === 'blue' ? 'bg-blue-500/10' : plan.color === 'indigo' ? 'bg-indigo-500/10' : 'bg-purple-500/10'}`}>
@@ -816,7 +823,7 @@ function LandingPageContent() {
                     ))}
                   </ul>
                   <button onClick={() => document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' })}
-                    className={`w-full py-3 px-4 rounded-xl font-medium transition-colors ${plan.popular ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'}`}>
+                    className={`w-full py-3 px-4 rounded-xl font-medium transition-all duration-300 ${plan.popular ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-500/25 hover:-translate-y-0.5' : 'glass-btn text-white'}`}>
                     {plan.cta}
                   </button>
                 </div>
@@ -832,8 +839,8 @@ function LandingPageContent() {
           <div className="text-center mb-16"><h2 className="text-4xl font-bold mb-4">Häufige Fragen</h2></div>
           <div className="space-y-4">
             {faqs.map((faq, i) => (
-              <div key={i} className="border border-slate-800 rounded-xl overflow-hidden">
-                <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-800/50 transition-colors">
+              <div key={i} className="glass rounded-xl overflow-hidden">
+                <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-white/[0.03] transition-colors">
                   <span className="font-medium">{faq.question}</span>
                   <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${openFaq === i ? 'rotate-180' : ''}`} />
                 </button>
@@ -845,8 +852,8 @@ function LandingPageContent() {
       </section>
 
       {/* Newsletter Signup */}
-      <section className="py-20 px-6 bg-slate-900/50">
-        <div className="max-w-xl mx-auto text-center">
+      <section className="py-20 px-6 relative">
+        <div className="max-w-xl mx-auto text-center glass-prominent relative rounded-3xl p-10 glass-specular">
           <Mail className="w-12 h-12 text-indigo-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-2">Shopify Performance Tipps</h2>
           <p className="text-slate-400 mb-6">Wöchentliche Tipps für schnellere Ladezeiten und mehr Conversion. Kein Spam.</p>
@@ -871,8 +878,8 @@ function LandingPageContent() {
               }
             }
           }}>
-            <input type="email" placeholder="deine@email.de" className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:border-indigo-500 text-white placeholder-slate-500" />
-            <button type="submit" className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium transition-colors">
+            <input type="email" placeholder="deine@email.de" className="flex-1 px-4 py-3 glass-input rounded-xl text-white placeholder-slate-500 outline-none" />
+            <button type="submit" className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl font-medium transition-all shadow-lg shadow-indigo-500/25">
               Anmelden
             </button>
           </form>
@@ -882,7 +889,8 @@ function LandingPageContent() {
       {/* Final CTA */}
       <section className="py-20 px-6">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-3xl p-12 text-center">
+          <div className="relative rounded-3xl p-12 text-center overflow-hidden" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.8), rgba(139,92,246,0.8))' }}>
+            <div className="absolute inset-0 glass-specular" />
             <h2 className="text-4xl font-bold mb-4">Bereit deinen Shop zu optimieren?</h2>
             <p className="text-lg text-indigo-100 mb-8 max-w-2xl mx-auto">Starte mit dem kostenlosen Speed Check oder setz dich auf die Waitlist für die vollständige Analyse.</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -900,7 +908,7 @@ function LandingPageContent() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800 py-12 px-6">
+      <footer className="border-t border-white/[0.06] py-12 px-6 relative">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <Logo size={40} showText={true} className="text-white" />
@@ -912,7 +920,7 @@ function LandingPageContent() {
               <a href="/impressum" className="hover:text-white transition-colors">Impressum</a>
             </div>
           </div>
-          <div className="mt-8 pt-8 border-t border-slate-800 text-center text-sm text-slate-500">
+          <div className="mt-8 pt-8 border-t border-white/[0.06] text-center text-sm text-slate-500">
             © 2026 ThemeMetrics – Julian Polleschner. Made with ❤️ in Berlin für Shopify Merchants.
           </div>
         </div>
