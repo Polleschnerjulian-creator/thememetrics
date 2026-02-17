@@ -7,6 +7,7 @@ import { scheduleLeadNurtureSequence } from '@/lib/email/service';
 import { sendEmail } from '@/lib/email/resend';
 import { captureError } from '@/lib/monitoring';
 import { z } from 'zod';
+import { cacheIncrement } from '@/lib/cache';
 
 // Zod schemas for input validation
 const leadPostSchema = z.object({
@@ -20,46 +21,23 @@ const leadPostSchema = z.object({
 // PageSpeed Insights API (kostenlos, kein API Key nötig für basic usage)
 const PAGESPEED_API = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 
-// Simple in-memory rate limiting
-// For production with multiple instances, use Redis (e.g., @upstash/ratelimit)
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+// Rate limiting via Upstash Redis (works across serverless instances)
 const MAX_REQUESTS_PER_WINDOW = 5; // Max 5 requests per IP per minute
 
-interface RateLimitEntry {
-  count: number;
-  resetTime: number;
-}
+async function checkRateLimit(ip: string): Promise<{ allowed: boolean; remaining: number }> {
+  const key = `ratelimit:leads:${ip}`;
+  const count = await cacheIncrement(key, 60); // 60 second TTL
 
-const rateLimitMap = new Map<string, RateLimitEntry>();
-
-// Cleanup old entries periodically
-setInterval(() => {
-  const now = Date.now();
-  const keysToDelete: string[] = [];
-  rateLimitMap.forEach((entry, key) => {
-    if (entry.resetTime < now) {
-      keysToDelete.push(key);
-    }
-  });
-  keysToDelete.forEach(key => rateLimitMap.delete(key));
-}, 60000); // Cleanup every minute
-
-function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-
-  if (!entry || entry.resetTime < now) {
-    // New window
-    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW - 1 };
+  // If Redis is unavailable, allow the request (graceful degradation)
+  if (count === null) {
+    return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW };
   }
 
-  if (entry.count >= MAX_REQUESTS_PER_WINDOW) {
+  if (count > MAX_REQUESTS_PER_WINDOW) {
     return { allowed: false, remaining: 0 };
   }
 
-  entry.count++;
-  return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW - entry.count };
+  return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW - count };
 }
 
 function getClientIP(request: NextRequest): string {
@@ -294,9 +272,9 @@ function calculateEstimatedRevenueLoss(score: number, monthlyRevenue: number = 5
 }
 
 export async function POST(request: NextRequest) {
-  // Rate limiting
+  // Rate limiting via Upstash Redis
   const clientIP = getClientIP(request);
-  const rateLimit = checkRateLimit(clientIP);
+  const rateLimit = await checkRateLimit(clientIP);
 
   if (!rateLimit.allowed) {
     return NextResponse.json(

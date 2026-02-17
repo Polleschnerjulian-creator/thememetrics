@@ -74,3 +74,86 @@ export function getAccessToken(storedToken: string): string {
   }
   return storedToken;
 }
+
+// ============================================
+// HMAC TOKENS (for unsubscribe links, etc.)
+// ============================================
+
+/**
+ * Generate an HMAC token for a given value (e.g., email address)
+ * Used for verifying unsubscribe links without storing tokens in DB
+ */
+export function generateHmacToken(value: string): string {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw new Error('SESSION_SECRET required for token generation');
+  return crypto.createHmac('sha256', secret).update(value).digest('hex');
+}
+
+/**
+ * Verify an HMAC token for a given value
+ */
+export function verifyHmacToken(value: string, token: string): boolean {
+  const expected = generateHmacToken(value);
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(token));
+  } catch {
+    return false;
+  }
+}
+
+// ============================================
+// PASSWORD HASHING (for workspace client passwords)
+// ============================================
+
+const SCRYPT_KEYLEN = 64;
+const SCRYPT_SALT_LEN = 16;
+
+/**
+ * Hash a password using scrypt (Node.js built-in, no external deps)
+ * Returns: salt:hash (both hex encoded)
+ */
+export async function hashPassword(password: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const salt = crypto.randomBytes(SCRYPT_SALT_LEN);
+    crypto.scrypt(password, salt, SCRYPT_KEYLEN, (err, derivedKey) => {
+      if (err) return reject(err);
+      resolve(`${salt.toString('hex')}:${derivedKey.toString('hex')}`);
+    });
+  });
+}
+
+/**
+ * Verify a password against a stored hash
+ * Uses timing-safe comparison to prevent timing attacks
+ */
+export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  const parts = storedHash.split(':');
+
+  // If it's not in salt:hash format, it's a legacy plaintext password
+  // Do a timing-safe comparison against the plaintext
+  if (parts.length !== 2 || parts[0].length !== SCRYPT_SALT_LEN * 2) {
+    try {
+      return crypto.timingSafeEqual(
+        Buffer.from(password, 'utf8'),
+        Buffer.from(storedHash, 'utf8')
+      );
+    } catch {
+      // Lengths don't match — passwords are different
+      return false;
+    }
+  }
+
+  const salt = Buffer.from(parts[0], 'hex');
+  const originalHash = Buffer.from(parts[1], 'hex');
+
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, SCRYPT_KEYLEN, (err, derivedKey) => {
+      if (err) return reject(err);
+      try {
+        resolve(crypto.timingSafeEqual(originalHash, derivedKey));
+      } catch {
+        resolve(false);
+      }
+    });
+  });
+}

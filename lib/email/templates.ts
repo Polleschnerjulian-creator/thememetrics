@@ -1,8 +1,20 @@
 // Email Templates for ThemeMetrics
 // Using inline styles for maximum email client compatibility
 
+import { generateHmacToken } from '@/lib/crypto';
+
 const BRAND_COLOR = '#6366f1';
 const BRAND_GRADIENT = 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://thememetrics.de';
+
+/**
+ * Generate a signed unsubscribe URL for a given email.
+ * Exported so the email sending layer can inject it into templates.
+ */
+export function getUnsubscribeUrl(email: string): string {
+  const token = generateHmacToken(email);
+  return `${APP_URL}/api/emails/unsubscribe?email=${encodeURIComponent(email)}&token=${token}`;
+}
 
 // Base template wrapper
 function baseTemplate(content: string): string {
@@ -45,7 +57,7 @@ function baseTemplate(content: string): string {
                       &nbsp;·&nbsp;
                       <a href="https://thememetrics.de/impressum" style="color: #9ca3af; text-decoration: underline;">Impressum</a>
                       &nbsp;·&nbsp;
-                      <a href="{{{unsubscribe_url}}}" style="color: #9ca3af; text-decoration: underline;">Abmelden</a>
+                      <a href="{{UNSUBSCRIBE_URL}}" style="color: #9ca3af; text-decoration: underline;">Abmelden</a>
                     </p>
                   </td>
                 </tr>

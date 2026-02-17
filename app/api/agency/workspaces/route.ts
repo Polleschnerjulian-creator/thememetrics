@@ -5,6 +5,8 @@ import { db, schema } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import { captureError } from '@/lib/monitoring';
+import { authenticateRequest, withCors } from '@/lib/auth';
+import { hashPassword } from '@/lib/crypto';
 
 function generateToken(): string {
   return randomBytes(32).toString('hex');
@@ -12,24 +14,16 @@ function generateToken(): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const shop = searchParams.get('shop');
-    const body = await request.json();
-
-    if (!shop) {
-      return NextResponse.json({ error: 'Shop parameter required' }, { status: 400 });
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
     }
+    const { store } = authResult;
+
+    const body = await request.json();
 
     if (!body.name || !body.shopDomain) {
       return NextResponse.json({ error: 'Name and shopDomain required' }, { status: 400 });
-    }
-
-    const store = await db.query.stores.findFirst({
-      where: eq(schema.stores.shopDomain, shop),
-    });
-
-    if (!store) {
-      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
     }
 
     const agency = await db.query.agencies.findFirst({
@@ -94,21 +88,18 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
+    }
+    const { store } = authResult;
+
     const { searchParams } = new URL(request.url);
-    const shop = searchParams.get('shop');
     const workspaceId = searchParams.get('id');
     const body = await request.json();
 
-    if (!shop || !workspaceId) {
-      return NextResponse.json({ error: 'Shop and workspace ID required' }, { status: 400 });
-    }
-
-    const store = await db.query.stores.findFirst({
-      where: eq(schema.stores.shopDomain, shop),
-    });
-
-    if (!store) {
-      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace ID required' }, { status: 400 });
     }
 
     const agency = await db.query.agencies.findFirst({
@@ -135,7 +126,12 @@ export async function PUT(request: NextRequest) {
     if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
     if (body.clientAccessEnabled !== undefined) updateData.clientAccessEnabled = body.clientAccessEnabled;
-    if (body.clientAccessPassword !== undefined) updateData.clientAccessPassword = body.clientAccessPassword;
+    if (body.clientAccessPassword !== undefined) {
+      // Hash password before storing
+      updateData.clientAccessPassword = body.clientAccessPassword
+        ? await hashPassword(body.clientAccessPassword)
+        : null;
+    }
     
     if (body.regenerateToken) {
       updateData.clientAccessToken = generateToken();
@@ -166,20 +162,17 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
+    }
+    const { store } = authResult;
+
     const { searchParams } = new URL(request.url);
-    const shop = searchParams.get('shop');
     const workspaceId = searchParams.get('id');
 
-    if (!shop || !workspaceId) {
-      return NextResponse.json({ error: 'Shop and workspace ID required' }, { status: 400 });
-    }
-
-    const store = await db.query.stores.findFirst({
-      where: eq(schema.stores.shopDomain, shop),
-    });
-
-    if (!store) {
-      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace ID required' }, { status: 400 });
     }
 
     const agency = await db.query.agencies.findFirst({

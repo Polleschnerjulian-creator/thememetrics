@@ -6,9 +6,16 @@ import {
   sendLeadNurtureEmail,
 } from '@/lib/email';
 import { captureError } from '@/lib/monitoring';
+import { authenticateRequest, withCors } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication — only authenticated stores can trigger emails
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
+    }
+
     const body = await request.json();
     const { type, ...data } = body;
 

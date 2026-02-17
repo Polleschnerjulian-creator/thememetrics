@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { captureError } from '@/lib/monitoring';
+import { getUnsubscribeUrl } from './templates';
 
 // Initialize Resend client
 export const resend = new Resend(process.env.RESEND_API_KEY);
@@ -23,11 +24,15 @@ export async function sendEmail({
   replyTo?: string;
 }) {
   try {
+    // Inject signed unsubscribe URL into template
+    const unsubscribeUrl = getUnsubscribeUrl(to);
+    const processedHtml = html.replace(/\{\{UNSUBSCRIBE_URL\}\}/g, unsubscribeUrl);
+
     const result = await resend.emails.send({
       from: FROM_EMAIL,
       to,
       subject,
-      html,
+      html: processedHtml,
       text,
       replyTo: replyTo,
     });

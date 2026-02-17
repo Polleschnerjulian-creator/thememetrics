@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, desc } from 'drizzle-orm';
+import { verifyPassword } from '@/lib/crypto';
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,11 +31,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Workspace is inactive' }, { status: 403 });
     }
 
-    if (workspace.clientAccessPassword && workspace.clientAccessPassword !== password) {
-      return NextResponse.json({ 
-        error: 'Password required',
-        passwordProtected: true,
-      }, { status: 401 });
+    if (workspace.clientAccessPassword) {
+      if (!password) {
+        return NextResponse.json({
+          error: 'Password required',
+          passwordProtected: true,
+        }, { status: 401 });
+      }
+      // Timing-safe password verification (supports both hashed and legacy plaintext)
+      const passwordValid = await verifyPassword(password, workspace.clientAccessPassword);
+      if (!passwordValid) {
+        return NextResponse.json({
+          error: 'Invalid password',
+          passwordProtected: true,
+        }, { status: 401 });
+      }
     }
 
     const agency = await db.query.agencies.findFirst({
