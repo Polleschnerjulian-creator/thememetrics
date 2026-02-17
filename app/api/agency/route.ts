@@ -4,23 +4,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { captureError } from '@/lib/monitoring';
+import { authenticateRequest, withCors } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const shop = searchParams.get('shop');
-
-    if (!shop) {
-      return NextResponse.json({ error: 'Shop parameter required' }, { status: 400 });
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
     }
-
-    const store = await db.query.stores.findFirst({
-      where: eq(schema.stores.shopDomain, shop),
-    });
-
-    if (!store) {
-      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
-    }
+    const { store } = authResult;
 
     const subscription = await db.query.subscriptions.findFirst({
       where: eq(schema.subscriptions.storeId, store.id),
@@ -40,7 +32,7 @@ export async function GET(request: NextRequest) {
     if (!agency) {
       const [newAgency] = await db.insert(schema.agencies)
         .values({
-          name: shop.replace('.myshopify.com', ''),
+          name: store.shopDomain.replace('.myshopify.com', ''),
           ownerEmail: '',
           ownerStoreId: store.id,
         })
@@ -51,7 +43,7 @@ export async function GET(request: NextRequest) {
         .values({
           agencyId: agency.id,
           name: 'Mein Shop',
-          shopDomain: shop,
+          shopDomain: store.shopDomain,
           storeId: store.id,
         });
     }
@@ -106,21 +98,12 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const shop = searchParams.get('shop');
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
+    }
+    const { store } = authResult;
     const body = await request.json();
-
-    if (!shop) {
-      return NextResponse.json({ error: 'Shop parameter required' }, { status: 400 });
-    }
-
-    const store = await db.query.stores.findFirst({
-      where: eq(schema.stores.shopDomain, shop),
-    });
-
-    if (!store) {
-      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
-    }
 
     const agency = await db.query.agencies.findFirst({
       where: eq(schema.agencies.ownerStoreId, store.id),

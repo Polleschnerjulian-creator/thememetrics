@@ -4,31 +4,16 @@ import { emailSubscriptions, stores } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { updateEmailPreferences, createEmailSubscription } from '@/lib/email';
 import { captureError } from '@/lib/monitoring';
+import { authenticateRequest, withCors } from '@/lib/auth';
 
 // GET - Get current preferences
 export async function GET(request: NextRequest) {
-  const shop = request.nextUrl.searchParams.get('shop');
-
-  if (!shop) {
-    return NextResponse.json(
-      { error: 'Shop parameter is required' },
-      { status: 400 }
-    );
-  }
-
   try {
-    // Get store
-    const [store] = await db
-      .select()
-      .from(stores)
-      .where(eq(stores.shopDomain, shop));
-
-    if (!store) {
-      return NextResponse.json(
-        { error: 'Store not found' },
-        { status: 404 }
-      );
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
     }
+    const { store } = authResult;
 
     // Get subscription
     const [subscription] = await db
@@ -68,28 +53,14 @@ export async function GET(request: NextRequest) {
 // POST - Update preferences
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
+    }
+    const { store } = authResult;
+
     const body = await request.json();
-    const { shop, email, preferences } = body;
-
-    if (!shop) {
-      return NextResponse.json(
-        { error: 'Shop is required' },
-        { status: 400 }
-      );
-    }
-
-    // Get store
-    const [store] = await db
-      .select()
-      .from(stores)
-      .where(eq(stores.shopDomain, shop));
-
-    if (!store) {
-      return NextResponse.json(
-        { error: 'Store not found' },
-        { status: 404 }
-      );
-    }
+    const { email, preferences } = body;
 
     // Check if subscription exists
     const [existingSubscription] = await db

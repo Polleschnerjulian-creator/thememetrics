@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
 import { PLANS, PlanId } from '@/lib/billing';
+import { authenticateRequest, withCors } from '@/lib/auth';
 
 // Get current month in format '2026-01'
 function getCurrentMonth(): string {
@@ -47,21 +48,12 @@ function getUpgradeSuggestion(
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const shop = searchParams.get('shop');
-
-    if (!shop) {
-      return NextResponse.json({ error: 'Shop parameter required' }, { status: 400 });
+    // Authenticate request
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
     }
-
-    // Get store
-    const store = await db.query.stores.findFirst({
-      where: eq(schema.stores.shopDomain, shop),
-    });
-
-    if (!store) {
-      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
-    }
+    const { store } = authResult;
 
     // Get subscription
     const subscription = await db.query.subscriptions.findFirst({

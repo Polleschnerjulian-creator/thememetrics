@@ -1,30 +1,17 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { db, schema } from '@/lib/db';
 import { eq, desc } from 'drizzle-orm';
+import { authenticateRequest, withCors } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const shop = searchParams.get('shop');
-
-    const cookieStore = await cookies();
-    const shopSession = shop || cookieStore.get('shop_session')?.value;
-
-    if (!shopSession) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
     }
-
-    // Phase 1: Get store first (required for all other queries)
-    const store = await db.query.stores.findFirst({
-      where: eq(schema.stores.shopDomain, shopSession),
-    });
-
-    if (!store) {
-      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
-    }
+    const { store, shop: shopSession } = authResult;
 
     // Phase 2: Parallel queries that only depend on store.id
     const [subscription, agency, latestAnalysis, history] = await Promise.all([

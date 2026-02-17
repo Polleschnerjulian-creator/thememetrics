@@ -4,6 +4,7 @@ import { stores, themeAnalyses, sectionAnalyses } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { createShopifyClient } from '@/lib/shopify';
 import { captureError } from '@/lib/monitoring';
+import { authenticateRequest, withCors } from '@/lib/auth';
 
 // Industry benchmarks for conversion impact
 const PERFORMANCE_BENCHMARKS = {
@@ -192,23 +193,12 @@ function calculateRevenueImpact(
 }
 
 export async function GET(request: NextRequest) {
-  const shop = request.nextUrl.searchParams.get('shop');
-  
-  if (!shop) {
-    return NextResponse.json({ error: 'Shop parameter required' }, { status: 400 });
-  }
-  
   try {
-    // Get store from database
-    const [store] = await db
-      .select()
-      .from(stores)
-      .where(eq(stores.shopDomain, shop.includes('.myshopify.com') ? shop : `${shop}.myshopify.com`))
-      .limit(1);
-    
-    if (!store) {
-      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
     }
+    const { store } = authResult;
     
     // Get latest analysis
     const [latestAnalysis] = await db

@@ -9,6 +9,7 @@ import { createEmailSubscription } from '@/lib/email';
 import { sendEmail } from '@/lib/email/resend';
 import { welcomeEmail } from '@/lib/email/templates';
 import { captureError, captureMessage } from '@/lib/monitoring';
+import { encrypt } from '@/lib/crypto';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -33,14 +34,13 @@ export async function GET(request: NextRequest) {
   const storedHost = cookieStore.get('shopify_host')?.value;
   const host = hostFromQuery || storedHost;
 
-  // RELAXED VALIDATION: If cookies are missing (Safari/third-party cookie blocking),
-  // still proceed if we have valid shop and code from Shopify
+  // Validate OAuth state to prevent CSRF attacks
   if (!storedState || state !== storedState) {
-    captureError(new Error('OAuth state mismatch - cookies may be blocked'), {
+    captureError(new Error('OAuth state mismatch - possible CSRF attack'), {
       tags: { route: 'auth/callback', shop },
       extra: { hasStoredState: !!storedState, stateMatch: storedState === state }
     });
-    // Continue anyway - Shopify redirect is trusted
+    return NextResponse.redirect(`${appUrl}/?error=state_mismatch`);
   }
 
   if (storedShop && shop !== storedShop) {
@@ -55,6 +55,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${appUrl}/?error=no_token`);
     }
 
+    // Encrypt access token before storing in database
+    const encryptedToken = encrypt(accessToken);
+
     const existingStore = await db.query.stores.findFirst({
       where: eq(schema.stores.shopDomain, shop),
     });
@@ -65,7 +68,7 @@ export async function GET(request: NextRequest) {
     if (existingStore) {
       try {
         await db.update(schema.stores).set({
-          accessToken,
+          accessToken: encryptedToken,
           status: 'active',
           updatedAt: new Date(),
         }).where(eq(schema.stores.id, existingStore.id));
@@ -78,7 +81,7 @@ export async function GET(request: NextRequest) {
       try {
         const [newStore] = await db.insert(schema.stores).values({
           shopDomain: shop,
-          accessToken,
+          accessToken: encryptedToken,
           plan: 'starter',
           status: 'active',
           installedAt: new Date(),
@@ -141,11 +144,18 @@ export async function GET(request: NextRequest) {
     cookieStore.delete('shopify_oauth_state');
     cookieStore.delete('shopify_shop');
     cookieStore.delete('shopify_host');
-    cookieStore.set('shop_session', shop, {
+
+    // Sign the session cookie with HMAC to prevent tampering
+    const crypto = require('crypto');
+    const sessionSecret = process.env.SESSION_SECRET || '';
+    const signature = crypto.createHmac('sha256', sessionSecret).update(shop).digest('hex');
+    const signedValue = `${shop}.${signature}`;
+
+    cookieStore.set('shop_session', signedValue, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24, // 24 hours (reduced from 7 days)
       path: '/',
     });
 

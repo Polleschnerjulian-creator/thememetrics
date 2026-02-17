@@ -4,23 +4,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
 import { captureError } from '@/lib/monitoring';
+import { authenticateRequest, withCors } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { code, shop } = body;
-
-    if (!code || !shop) {
-      return NextResponse.json({ error: 'Code und Shop erforderlich' }, { status: 400 });
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
     }
+    const { store } = authResult;
 
-    // Get store
-    const store = await db.query.stores.findFirst({
-      where: eq(schema.stores.shopDomain, shop),
-    });
+    const body = await request.json();
+    const { code } = body;
 
-    if (!store) {
-      return NextResponse.json({ error: 'Store nicht gefunden' }, { status: 404 });
+    if (!code) {
+      return NextResponse.json({ error: 'Code erforderlich' }, { status: 400 });
     }
 
     // Find promo code

@@ -4,6 +4,8 @@ import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { verifySessionToken, getShopFromToken, getSessionTokenFromRequest } from './session-token';
 import { isValidShopDomain, sanitizeShopDomain } from './security';
+import { getAccessToken } from './crypto';
+import crypto from 'crypto';
 
 /**
  * CORS headers for embedded Shopify apps
@@ -130,14 +132,29 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthRes
     }
   }
 
-  // 3. Try cookie fallback (non-embedded context)
+  // 3. Try cookie fallback (non-embedded context) - verify HMAC signature
   if (!shop) {
     const cookieStore = await cookies();
     const shopSession = cookieStore.get('shop_session')?.value;
 
-    if (shopSession && isValidShopDomain(shopSession)) {
-      shop = sanitizeShopDomain(shopSession);
-      authMethod = 'cookie';
+    if (shopSession) {
+      // Support both signed (shop.signature) and legacy unsigned cookies
+      const dotIndex = shopSession.lastIndexOf('.');
+      if (dotIndex > 0) {
+        const cookieShop = shopSession.substring(0, dotIndex);
+        const cookieSignature = shopSession.substring(dotIndex + 1);
+        const sessionSecret = process.env.SESSION_SECRET || '';
+        const expectedSignature = crypto.createHmac('sha256', sessionSecret).update(cookieShop).digest('hex');
+
+        if (cookieSignature === expectedSignature && isValidShopDomain(cookieShop)) {
+          shop = sanitizeShopDomain(cookieShop);
+          authMethod = 'cookie';
+        }
+      } else if (isValidShopDomain(shopSession)) {
+        // Legacy unsigned cookie — still accept but log for migration
+        shop = sanitizeShopDomain(shopSession);
+        authMethod = 'cookie';
+      }
     }
   }
 
@@ -192,10 +209,13 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthRes
     };
   }
 
+  // Decrypt access token (supports both encrypted and legacy plaintext tokens)
+  const decryptedToken = getAccessToken(store.accessToken);
+
   return {
     success: true,
     shop: sanitizedShop,
-    store,
+    store: { ...store, accessToken: decryptedToken },
   };
 }
 

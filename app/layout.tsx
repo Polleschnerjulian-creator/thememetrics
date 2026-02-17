@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { AppBridgeProvider } from '@/components/providers/AppBridgeProvider';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { LanguageProvider } from '@/components/providers/LanguageProvider';
+import { AppBridgeScript } from '@/components/providers/AppBridgeScript';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -21,12 +22,10 @@ export default function RootLayout({
   return (
     <html lang="de" suppressHydrationWarning>
       <head>
-        {/* App Bridge MUST be the first script, without async/defer */}
-        {/* The API key is required for App Bridge to initialize properly */}
-        <script 
-          src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
-          data-api-key={process.env.NEXT_PUBLIC_SHOPIFY_API_KEY}
-        ></script>
+        {/* App Bridge script only loads when shop param is present (embedded context) */}
+        <Suspense fallback={null}>
+          <AppBridgeScript apiKey={process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || ''} />
+        </Suspense>
       </head>
       <body className={inter.className}>
         <ThemeProvider>

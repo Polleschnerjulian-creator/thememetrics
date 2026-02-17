@@ -48,7 +48,7 @@ export function StoreGuard({ children }: StoreGuardProps) {
               window.top.postMessage(JSON.stringify({
                 type: 'redirect',
                 url: installUrl
-              }), '*');
+              }), 'https://admin.shopify.com');
 
               // Also try direct redirect (might fail due to cross-origin)
               setTimeout(() => {

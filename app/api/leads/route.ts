@@ -6,6 +6,16 @@ import { eq } from 'drizzle-orm';
 import { scheduleLeadNurtureSequence } from '@/lib/email/service';
 import { sendEmail } from '@/lib/email/resend';
 import { captureError } from '@/lib/monitoring';
+import { z } from 'zod';
+
+// Zod schemas for input validation
+const leadPostSchema = z.object({
+  email: z.string().email('Ungültige E-Mail-Adresse').max(320),
+  shopUrl: z.string().min(3, 'Ungültige Shop-URL').max(500),
+  utm_source: z.string().max(200).optional(),
+  utm_medium: z.string().max(200).optional(),
+  utm_campaign: z.string().max(200).optional(),
+});
 
 // PageSpeed Insights API (kostenlos, kein API Key nötig für basic usage)
 const PAGESPEED_API = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
@@ -300,17 +310,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { email, shopUrl, utm_source, utm_medium, utm_campaign } = body;
 
-    // Validate email
-    if (!email || !email.includes('@')) {
-      return NextResponse.json({ error: 'Ungültige E-Mail-Adresse' }, { status: 400 });
+    // Validate input with Zod
+    const parsed = leadPostSchema.safeParse(body);
+    if (!parsed.success) {
+      const firstError = parsed.error.errors[0]?.message || 'Ungültige Eingabe';
+      return NextResponse.json({ error: firstError }, { status: 400 });
     }
 
-    // Validate shop URL
-    if (!shopUrl || shopUrl.trim().length < 3) {
-      return NextResponse.json({ error: 'Ungültige Shop-URL' }, { status: 400 });
-    }
+    const { email, shopUrl, utm_source, utm_medium, utm_campaign } = parsed.data;
 
     // Check if email already exists
     let existingLead;
@@ -397,49 +405,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     captureError(error as Error, { tags: { route: 'leads', method: 'POST' } });
     return NextResponse.json({ error: 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.' }, { status: 500 });
-  }
-}
-
-// GET endpoint for newsletter signup (simpler, no speed check)
-export async function GET(request: NextRequest) {
-  // Rate limiting
-  const clientIP = getClientIP(request);
-  const rateLimit = checkRateLimit(clientIP);
-
-  if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: 'Zu viele Anfragen. Bitte warte eine Minute.' },
-      {
-        status: 429,
-        headers: { 'Retry-After': '60' }
-      }
-    );
-  }
-
-  const searchParams = request.nextUrl.searchParams;
-  const email = searchParams.get('email');
-  const source = searchParams.get('source') || 'newsletter';
-
-  if (!email || !email.includes('@')) {
-    return NextResponse.json({ error: 'Ungültige E-Mail-Adresse' }, { status: 400 });
-  }
-
-  try {
-    const existingLead = await db.query.emailLeads.findFirst({
-      where: eq(schema.emailLeads.email, email.toLowerCase().trim()),
-    });
-
-    if (!existingLead) {
-      await db.insert(schema.emailLeads).values({
-        email: email.toLowerCase().trim(),
-        source,
-      });
-    }
-
-    return NextResponse.json({ success: true, message: 'Erfolgreich angemeldet!' });
-  } catch (error) {
-    captureError(error as Error, { tags: { route: 'leads', method: 'GET' } });
-    return NextResponse.json({ error: 'Ein Fehler ist aufgetreten' }, { status: 500 });
   }
 }
 

@@ -120,28 +120,26 @@ export async function POST(request: NextRequest) {
       strategy = 'mobile';
     }
 
-    // Check plan limits if shop is provided
-    if (shop) {
-      const store = await db.query.stores.findFirst({
-        where: eq(schema.stores.shopDomain, shop),
-      });
+    // Authenticate and check plan limits
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return withCors(NextResponse.json({ error: authResult.error }, { status: authResult.status }));
+    }
+    const { store } = authResult;
 
-      if (store) {
-        const subscription = await db.query.subscriptions.findFirst({
-          where: eq(schema.subscriptions.storeId, store.id),
-        });
+    const subscription = await db.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.storeId, store.id),
+    });
 
-        const planId = (subscription?.plan || 'free') as PlanId;
-        const usageCheck = await checkAndUpdateUsage(store.id, planId, strategy === 'desktop');
+    const planId = (subscription?.plan || 'free') as PlanId;
+    const usageCheck = await checkAndUpdateUsage(store.id, planId, strategy === 'desktop');
 
-        if (!usageCheck.allowed) {
-          return NextResponse.json({ 
-            error: 'Plan limit reached',
-            message: usageCheck.error,
-            upgradeRequired: true,
-          }, { status: 403 });
-        }
-      }
+    if (!usageCheck.allowed) {
+      return NextResponse.json({
+        error: 'Plan limit reached',
+        message: usageCheck.error,
+        upgradeRequired: true,
+      }, { status: 403 });
     }
 
     const apiKey = process.env.PAGESPEED_API_KEY;
