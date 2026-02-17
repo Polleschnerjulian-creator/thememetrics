@@ -95,9 +95,16 @@ async function getPageSpeedData(url: string): Promise<PageSpeedResult | null> {
       fullUrl = `https://${urlWithoutProtocol}.myshopify.com`;
     }
 
-    const apiUrl = `${PAGESPEED_API}?url=${encodeURIComponent(fullUrl)}&strategy=mobile&category=performance`;
-    
-    const response = await fetch(apiUrl, {
+    const apiKey = process.env.PAGESPEED_API_KEY;
+    const apiUrl = new URL(PAGESPEED_API);
+    apiUrl.searchParams.set('url', fullUrl);
+    apiUrl.searchParams.set('strategy', 'mobile');
+    apiUrl.searchParams.set('category', 'performance');
+    if (apiKey) {
+      apiUrl.searchParams.set('key', apiKey);
+    }
+
+    const response = await fetch(apiUrl.toString(), {
       headers: {
         'Accept': 'application/json',
       },
@@ -107,8 +114,15 @@ async function getPageSpeedData(url: string): Promise<PageSpeedResult | null> {
       // Try with www. prefix if it failed
       if (!fullUrl.includes('www.')) {
         const wwwUrl = fullUrl.replace('https://', 'https://www.');
+        const retryApiUrl = new URL(PAGESPEED_API);
+        retryApiUrl.searchParams.set('url', wwwUrl);
+        retryApiUrl.searchParams.set('strategy', 'mobile');
+        retryApiUrl.searchParams.set('category', 'performance');
+        if (apiKey) {
+          retryApiUrl.searchParams.set('key', apiKey);
+        }
 
-        const retryResponse = await fetch(`${PAGESPEED_API}?url=${encodeURIComponent(wwwUrl)}&strategy=mobile&category=performance`);
+        const retryResponse = await fetch(retryApiUrl.toString());
         if (retryResponse.ok) {
           const retryData = await retryResponse.json();
           if (retryData.lighthouseResult) {
