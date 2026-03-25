@@ -23,7 +23,6 @@
     "@radix-ui/react-tabs": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.6",
     "@shopify/app-bridge-react": "^4.2.8",
-    "@shopify/polaris": "^13.9.5",
     "@shopify/shopify-api": "^11.6.0",
     "@upstash/redis": "^1.36.1",
     "class-variance-authority": "^0.7.1",
@@ -36,7 +35,6 @@
     "react-dom": "^18.3.1",
     "recharts": "^2.15.0",
     "resend": "^6.8.0",
-    "stripe": "^17.5.0",
     "tailwind-merge": "^2.6.0",
     "zod": "^3.24.1"
   },

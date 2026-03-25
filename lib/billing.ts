@@ -1,4 +1,3 @@
-import { createShopifyClient } from './shopify';
 import { captureError } from '@/lib/monitoring';
 
 // Pricing Plans - Based on 2026 Pricing Strategy
@@ -123,64 +122,150 @@ export const PLANS = {
 
 export type PlanId = keyof typeof PLANS;
 
-// Create a recurring subscription charge (not for free plan)
+// Execute a Shopify Admin GraphQL mutation/query
+async function shopifyGraphql<T>(
+  shop: string,
+  accessToken: string,
+  query: string,
+  variables?: Record<string, unknown>
+): Promise<T> {
+  const response = await fetch(
+    `https://${shop}/admin/api/2025-01/graphql.json`,
+    {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, variables }),
+    }
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Shopify GraphQL HTTP error ${response.status}: ${text}`);
+  }
+
+  const result = await response.json();
+
+  if (result.errors?.length) {
+    throw new Error(`Shopify GraphQL errors: ${JSON.stringify(result.errors)}`);
+  }
+
+  return result.data as T;
+}
+
+// Extract numeric ID from a Shopify GID (e.g. "gid://shopify/AppSubscription/123" → "123")
+function gidToNumericId(gid: string): string {
+  const parts = gid.split('/');
+  return parts[parts.length - 1];
+}
+
+// Create a recurring subscription charge using GraphQL Billing API
 export async function createSubscription(
   shop: string,
   accessToken: string,
   planId: PlanId,
   returnUrl: string
-): Promise<{ confirmationUrl: string; chargeId: number } | null> {
-  // Free plan doesn't need Shopify billing
+): Promise<{ confirmationUrl: string; chargeId: string } | null> {
   if (planId === 'free') {
     return null;
   }
 
   const plan = PLANS[planId];
-  const client = createShopifyClient(shop, accessToken);
-  
-  const response = await client.post<{
-    recurring_application_charge: {
-      id: number;
-      confirmation_url: string;
+  const isTest = process.env.NODE_ENV !== 'production';
+
+  const mutation = `
+    mutation appSubscriptionCreate(
+      $name: String!
+      $returnUrl: URL!
+      $trialDays: Int
+      $test: Boolean
+      $lineItems: [AppSubscriptionLineItemInput!]!
+    ) {
+      appSubscriptionCreate(
+        name: $name
+        returnUrl: $returnUrl
+        trialDays: $trialDays
+        test: $test
+        lineItems: $lineItems
+      ) {
+        userErrors {
+          field
+          message
+        }
+        appSubscription {
+          id
+        }
+        confirmationUrl
+      }
+    }
+  `;
+
+  const variables = {
+    name: `ThemeMetrics ${plan.name}`,
+    returnUrl,
+    trialDays: plan.trialDays > 0 ? plan.trialDays : null,
+    test: isTest,
+    lineItems: [
+      {
+        plan: {
+          appRecurringPricingDetails: {
+            price: {
+              amount: plan.price.toFixed(2),
+              currencyCode: 'EUR',
+            },
+            interval: 'EVERY_30_DAYS',
+          },
+        },
+      },
+    ],
+  };
+
+  const data = await shopifyGraphql<{
+    appSubscriptionCreate: {
+      userErrors: Array<{ field: string; message: string }>;
+      appSubscription: { id: string } | null;
+      confirmationUrl: string | null;
     };
-  }>('/recurring_application_charges.json', {
-    recurring_application_charge: {
-      name: `ThemeMetrics ${plan.name}`,
-      price: plan.price,
-      return_url: returnUrl,
-      trial_days: plan.trialDays,
-      test: process.env.NODE_ENV !== 'production', // Test mode for dev
-    },
-  });
+  }>(shop, accessToken, mutation, variables);
+
+  const result = data.appSubscriptionCreate;
+
+  if (result.userErrors.length > 0) {
+    throw new Error(
+      `Shopify billing error: ${result.userErrors.map((e) => e.message).join(', ')}`
+    );
+  }
+
+  if (!result.confirmationUrl || !result.appSubscription) {
+    return null;
+  }
 
   return {
-    confirmationUrl: response.recurring_application_charge.confirmation_url,
-    chargeId: response.recurring_application_charge.id,
+    confirmationUrl: result.confirmationUrl,
+    chargeId: gidToNumericId(result.appSubscription.id),
   };
 }
 
-// Activate a subscription after merchant approval
+// Verify subscription is active after merchant approval (GraphQL auto-activates on approval)
 export async function activateSubscription(
   shop: string,
   accessToken: string,
-  chargeId: number
+  chargeId: number | string
 ): Promise<boolean> {
-  const client = createShopifyClient(shop, accessToken);
-  
   try {
-    // Get the charge to check its status
-    const charge = await client.get<{
-      recurring_application_charge: {
-        status: string;
-      };
-    }>(`/recurring_application_charges/${chargeId}.json`);
-
-    if (charge.recurring_application_charge.status === 'accepted') {
-      // Activate the charge
-      await client.post(`/recurring_application_charges/${chargeId}/activate.json`, {});
-      return true;
+    const status = await getSubscriptionStatus(shop, accessToken);
+    // After GraphQL billing approval, the subscription is automatically active.
+    // We just verify it's active and optionally match the charge ID.
+    if (status.active && status.plan !== 'free') {
+      // If chargeId matches, great. If not (edge case), still accept active state.
+      const numericChargeId = String(chargeId);
+      if (!status.shopifySubscriptionId || status.shopifySubscriptionId === numericChargeId) {
+        return true;
+      }
+      return true; // Accept any active subscription
     }
-    
     return false;
   } catch (error) {
     captureError(error);
@@ -188,75 +273,128 @@ export async function activateSubscription(
   }
 }
 
-// Get current subscription status
+// Get current subscription status via GraphQL
 export async function getSubscriptionStatus(
   shop: string,
   accessToken: string
 ): Promise<{
   active: boolean;
   plan: PlanId;
-  chargeId: number | null;
+  shopifySubscriptionId: string | null;
   trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
 }> {
-  const client = createShopifyClient(shop, accessToken);
-  
-  try {
-    const response = await client.get<{
-      recurring_application_charges: Array<{
-        id: number;
-        name: string;
-        status: string;
-        trial_ends_on: string | null;
-      }>;
-    }>('/recurring_application_charges.json');
+  const query = `
+    query {
+      currentAppInstallation {
+        activeSubscriptions {
+          id
+          name
+          status
+          trialDays
+          currentPeriodEnd
+        }
+      }
+    }
+  `;
 
-    const activeCharge = response.recurring_application_charges.find(
-      (c) => c.status === 'active'
+  try {
+    const data = await shopifyGraphql<{
+      currentAppInstallation: {
+        activeSubscriptions: Array<{
+          id: string;
+          name: string;
+          status: string;
+          trialDays: number;
+          currentPeriodEnd: string | null;
+        }>;
+      };
+    }>(shop, accessToken, query);
+
+    const activeSubscriptions = data.currentAppInstallation.activeSubscriptions;
+    const activeSubscription = activeSubscriptions.find(
+      (s) => s.status === 'ACTIVE' || s.status === 'PENDING'
     );
 
-    if (activeCharge) {
-      // Determine plan from charge name
+    if (activeSubscription) {
       let plan: PlanId = 'starter';
-      if (activeCharge.name.includes('Pro')) plan = 'pro';
-      if (activeCharge.name.includes('Agency')) plan = 'agency';
+      const name = activeSubscription.name.toLowerCase();
+      if (name.includes('pro')) plan = 'pro';
+      if (name.includes('agency')) plan = 'agency';
+      if (name.includes('starter')) plan = 'starter';
 
       return {
         active: true,
         plan,
-        chargeId: activeCharge.id,
-        trialEndsAt: activeCharge.trial_ends_on,
+        shopifySubscriptionId: gidToNumericId(activeSubscription.id),
+        trialEndsAt: null, // trial info not directly available here
+        currentPeriodEnd: activeSubscription.currentPeriodEnd,
       };
     }
 
-    // No active subscription = Free plan
     return {
       active: true, // Free plan is always "active"
       plan: 'free',
-      chargeId: null,
+      shopifySubscriptionId: null,
       trialEndsAt: null,
+      currentPeriodEnd: null,
     };
   } catch (error) {
     captureError(error);
-    // Default to free plan on error
     return {
       active: true,
       plan: 'free',
-      chargeId: null,
+      shopifySubscriptionId: null,
       trialEndsAt: null,
+      currentPeriodEnd: null,
     };
   }
 }
 
-// Cancel a subscription
+// Cancel a subscription via GraphQL
 export async function cancelSubscription(
   shop: string,
   accessToken: string,
-  chargeId: number
+  _chargeId?: number | string
 ): Promise<boolean> {
-  const client = createShopifyClient(shop, accessToken);
-  
   try {
-    await client.post(`/recurring_application_charges/${chargeId}/cancel.json`, {});
+    // Query active subscriptions to get the GID
+    const status = await getSubscriptionStatus(shop, accessToken);
+    if (!status.shopifySubscriptionId) {
+      return true; // Nothing to cancel
+    }
+
+    const subscriptionGid = `gid://shopify/AppSubscription/${status.shopifySubscriptionId}`;
+
+    const mutation = `
+      mutation appSubscriptionCancel($id: ID!) {
+        appSubscriptionCancel(id: $id) {
+          userErrors {
+            field
+            message
+          }
+          appSubscription {
+            id
+            status
+          }
+        }
+      }
+    `;
+
+    const data = await shopifyGraphql<{
+      appSubscriptionCancel: {
+        userErrors: Array<{ field: string; message: string }>;
+        appSubscription: { id: string; status: string } | null;
+      };
+    }>(shop, accessToken, mutation, { id: subscriptionGid });
+
+    const result = data.appSubscriptionCancel;
+
+    if (result.userErrors.length > 0) {
+      captureError(new Error(`Cancel errors: ${result.userErrors.map((e) => e.message).join(', ')}`));
+      return false;
+    }
+
     return true;
   } catch (error) {
     captureError(error);

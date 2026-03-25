@@ -7,7 +7,7 @@ application_url = "https://thememetrics.de/dashboard"
 embedded = true
 
 [access_scopes]
-scopes = "read_orders,read_products,read_themes"
+scopes = "read_themes"
 
 [auth]
 redirect_urls = [

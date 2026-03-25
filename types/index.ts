@@ -92,8 +92,6 @@ export interface Recommendation {
 export interface Subscription {
   id: string;
   storeId: string;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
   plan: 'free' | 'starter' | 'pro' | 'agency';
   status: 'active' | 'cancelled' | 'pending' | 'expired';
   currentPeriodEnd: Date | null;

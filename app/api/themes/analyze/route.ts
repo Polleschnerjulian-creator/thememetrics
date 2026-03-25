@@ -3,7 +3,12 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
-import { createShopifyClient } from '@/lib/shopify';
+import {
+  fetchThemes,
+  fetchThemeFileList,
+  fetchThemeFileContents,
+  gidToId,
+} from '@/lib/shopify';
 import { analyzeSection, calculateHealthScore } from '@/lib/parser';
 import { generateRecommendations, countProblematicSections } from '@/lib/recommendations';
 import { PLANS, PlanId } from '@/lib/billing';
@@ -43,7 +48,6 @@ async function fetchCoreWebVitals(shopDomain: string): Promise<CoreWebVitals | n
   }
 
   try {
-    // Build shop URL
     const shopUrl = shopDomain.includes('://')
       ? shopDomain
       : `https://${shopDomain.replace('.myshopify.com', '')}.myshopify.com`;
@@ -55,7 +59,7 @@ async function fetchCoreWebVitals(shopDomain: string): Promise<CoreWebVitals | n
     apiUrl.searchParams.set('category', 'performance');
 
     const response = await fetch(apiUrl.toString(), {
-      signal: AbortSignal.timeout(60000), // 60 second timeout
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!response.ok) {
@@ -76,9 +80,7 @@ async function fetchCoreWebVitals(shopDomain: string): Promise<CoreWebVitals | n
       tbt: audits['total-blocking-time']?.numericValue || 300,
     };
 
-    // Cache the result for 24 hours
     await setCachedPageSpeed(shopDomain, 'mobile', vitals);
-
     return vitals;
   } catch (error) {
     captureError(error as Error, { tags: { function: 'fetchCoreWebVitals' } });
@@ -86,45 +88,23 @@ async function fetchCoreWebVitals(shopDomain: string): Promise<CoreWebVitals | n
   }
 }
 
-// Check plan limits and update usage (atomic - no race conditions)
-async function checkAndUpdateUsage(storeId: number, planId: PlanId): Promise<{ allowed: boolean; error?: string }> {
+// Check plan limits and update usage (atomic)
+async function checkAndUpdateUsage(
+  storeId: number,
+  planId: PlanId
+): Promise<{ allowed: boolean; error?: string }> {
   const result = await checkAndIncrementUsage(storeId, planId, 'themeAnalysis');
-  return {
-    allowed: result.allowed,
-    error: result.error,
-  };
+  return { allowed: result.allowed, error: result.error };
 }
 
-// Count snippets in theme
-async function countSnippets(client: any, themeId: string): Promise<number> {
-  try {
-    const response = await client.get(`/themes/${themeId}/assets.json`);
-    const assets = response.assets || [];
-    return assets.filter((a: any) => a.key.startsWith('snippets/') && a.key.endsWith('.liquid')).length;
-  } catch {
-    return 0;
-  }
-}
-
-// Check if theme uses translations
-async function hasTranslations(client: any, themeId: string): Promise<boolean> {
-  try {
-    const response = await client.get(`/themes/${themeId}/assets.json`);
-    const assets = response.assets || [];
-    return assets.some((a: any) => a.key.startsWith('locales/'));
-  } catch {
-    return false;
-  }
-}
-
-async function runAnalysis(request: NextRequest, bodyShop?: string): Promise<NextResponse> {
+async function runAnalysis(request: NextRequest): Promise<NextResponse> {
   // Authenticate request using session token or cookie fallback
   const authResult = await authenticateRequest(request);
-  
+
   if (!authResult.success) {
     return authErrorResponse(authResult);
   }
-  
+
   const { shop: sanitizedShop, store } = authResult;
 
   // Check API rate limit (per minute)
@@ -133,84 +113,116 @@ async function runAnalysis(request: NextRequest, bodyShop?: string): Promise<Nex
     return rateLimitResponse(apiLimit.resetIn);
   }
 
-  // Set user context for error tracking
   setUserContext({ id: String(store.id), shop: store.shopDomain });
 
   // Get subscription to check plan
   const subscription = await db.query.subscriptions.findFirst({
     where: eq(schema.subscriptions.storeId, store.id),
   });
-  
+
   const currentPlan = (subscription?.plan || 'free') as PlanId;
 
   // Check daily analysis limit
   const dailyLimit = await checkDailyAnalysisLimit(store.id, currentPlan as any);
   if (!dailyLimit.allowed) {
-    return NextResponse.json({ 
-      error: 'daily_limit_reached',
-      message: `Du hast dein tägliches Limit von ${dailyLimit.limit} Analysen erreicht. Nächster Reset: ${dailyLimit.resetAt.toLocaleString('de-DE')}`,
-      upgradeRequired: true,
-      currentPlan,
-      used: dailyLimit.used,
-      limit: dailyLimit.limit,
-    }, { status: 403 });
+    return NextResponse.json(
+      {
+        error: 'daily_limit_reached',
+        message: `Du hast dein tägliches Limit von ${dailyLimit.limit} Analysen erreicht. Nächster Reset: ${dailyLimit.resetAt.toLocaleString('de-DE')}`,
+        upgradeRequired: true,
+        currentPlan,
+        used: dailyLimit.used,
+        limit: dailyLimit.limit,
+      },
+      { status: 403 }
+    );
   }
 
-  // Check usage limits (monthly)
+  // Check monthly usage limits
   const usageCheck = await checkAndUpdateUsage(store.id, currentPlan);
   if (!usageCheck.allowed) {
-    return NextResponse.json({ 
-      error: 'limit_reached',
-      message: usageCheck.error,
-      upgradeRequired: true,
-      currentPlan,
-    }, { status: 403 });
+    return NextResponse.json(
+      {
+        error: 'limit_reached',
+        message: usageCheck.error,
+        upgradeRequired: true,
+        currentPlan,
+      },
+      { status: 403 }
+    );
   }
 
-  captureMessage(`Analysis started for ${store.shopDomain}`, { 
-    tags: { plan: currentPlan } 
+  captureMessage(`Analysis started for ${store.shopDomain}`, {
+    tags: { plan: currentPlan },
   });
 
-  const client = createShopifyClient(store.shopDomain, store.accessToken);
-  const { themes: shopifyThemes } = await client.get<any>('/themes.json');
-  const mainTheme = shopifyThemes.find((t: any) => t.role === 'main') || shopifyThemes[0];
+  // ---- Fetch themes via GraphQL ----
+  const themes = await fetchThemes(store.shopDomain, store.accessToken);
+  const mainGqlTheme =
+    themes.find((t) => t.role === 'MAIN') ?? themes[0];
 
-  if (!mainTheme) {
+  if (!mainGqlTheme) {
     return NextResponse.json({ error: 'No theme found' }, { status: 404 });
   }
 
+  const mainThemeNumericId = gidToId(mainGqlTheme.id);
+
+  // Upsert theme record in DB
   let theme = await db.query.themes.findFirst({
     where: and(
       eq(schema.themes.storeId, store.id),
-      eq(schema.themes.shopifyThemeId, mainTheme.id.toString())
+      eq(schema.themes.shopifyThemeId, mainThemeNumericId)
     ),
   });
 
   if (!theme) {
-    const [newTheme] = await db.insert(schema.themes).values({
-      storeId: store.id,
-      shopifyThemeId: mainTheme.id.toString(),
-      name: mainTheme.name,
-      role: mainTheme.role,
-    }).returning();
+    const [newTheme] = await db
+      .insert(schema.themes)
+      .values({
+        storeId: store.id,
+        shopifyThemeId: mainThemeNumericId,
+        name: mainGqlTheme.name,
+        role: mainGqlTheme.role.toLowerCase(),
+      })
+      .returning();
     theme = newTheme;
   }
 
-  // Fetch all theme assets - sort alphabetically for consistent results
-  const { assets } = await client.get<any>(`/themes/${mainTheme.id}/assets.json`);
-  const sectionAssets = assets
-    .filter((a: any) => a.key.startsWith('sections/') && a.key.endsWith('.liquid'))
-    .sort((a: any, b: any) => a.key.localeCompare(b.key));
+  // ---- Fetch file list via GraphQL ----
+  const allFiles = await fetchThemeFileList(
+    store.shopDomain,
+    store.accessToken,
+    mainGqlTheme.id
+  );
 
-  // Analyze sections
+  const sectionFilenames = allFiles
+    .filter((f) => f.filename.startsWith('sections/') && f.filename.endsWith('.liquid'))
+    .sort((a, b) => a.filename.localeCompare(b.filename))
+    .slice(0, 25) // Analyze up to 25 sections
+    .map((f) => f.filename);
+
+  const snippetsCount = allFiles.filter(
+    (f) => f.filename.startsWith('snippets/') && f.filename.endsWith('.liquid')
+  ).length;
+
+  const hasTranslations = allFiles.some((f) => f.filename.startsWith('locales/'));
+
+  // ---- Fetch section file contents in one GraphQL call ----
+  const sectionFileContents = await fetchThemeFileContents(
+    store.shopDomain,
+    store.accessToken,
+    mainGqlTheme.id,
+    sectionFilenames
+  );
+
+  // ---- Analyze sections ----
   const analyzedSections: SectionAnalysisData[] = [];
-  for (const asset of sectionAssets.slice(0, 25)) { // Analyze up to 25 sections
+
+  for (const file of sectionFileContents) {
     try {
-      const { asset: fullAsset } = await client.get<any>(
-        `/themes/${mainTheme.id}/assets.json?asset[key]=${encodeURIComponent(asset.key)}`
-      );
-      if (fullAsset?.value) {
-        const analysis = analyzeSection(asset.key, fullAsset.value);
+      const content = file.body?.content;
+      if (content) {
+        const analysis = analyzeSection(file.filename, content);
         analyzedSections.push({
           name: analysis.name,
           type: analysis.type,
@@ -229,79 +241,72 @@ async function runAnalysis(request: NextRequest, bodyShop?: string): Promise<Nex
         });
       }
     } catch (err) {
-      captureError(err as Error, { tags: { function: 'analyzeSection', assetKey: asset.key } });
+      captureError(err as Error, {
+        tags: { function: 'analyzeSection', assetKey: file.filename },
+      });
     }
   }
 
-  // Fetch Core Web Vitals from Google (parallel with theme data)
-  const [coreWebVitals, snippetsCount, usesTranslations] = await Promise.all([
-    fetchCoreWebVitals(store.shopDomain),
-    countSnippets(client, mainTheme.id),
-    hasTranslations(client, mainTheme.id),
-  ]);
+  // ---- Fetch Core Web Vitals in parallel ----
+  const coreWebVitals = await fetchCoreWebVitals(store.shopDomain);
 
-  // Prepare theme data
+  // ---- Prepare theme data ----
   const themeData: ThemeData = {
     totalSections: analyzedSections.length,
     snippetsCount,
-    hasTranslations: usesTranslations,
-    sectionsAboveFold: Math.min(3, analyzedSections.length), // Assume first 3 are above fold
+    hasTranslations,
+    sectionsAboveFold: Math.min(3, analyzedSections.length),
   };
 
-  // Calculate ThemeMetrics Score
   const scoreBreakdown = calculateThemeMetricsScore(
     coreWebVitals,
     analyzedSections,
     themeData,
-    undefined // No revenue data yet
+    undefined
   );
 
-  // Check plan features
   const planFeatures = PLANS[currentPlan].features;
   const showSectionDetails = planFeatures.sectionDetails;
   const maxRecommendations = planFeatures.recommendations;
 
-  // Prepare sections with recommendations
-  const sectionsWithRecs = analyzedSections.map(section => {
+  const sectionsWithRecs = analyzedSections.map((section) => {
     const performanceScore = 100 - (section.complexityScore || 0);
-    const recs = generateRecommendations([section as any]).map(r => r.title);
+    const recs = generateRecommendations([section as any]).map((r) => r.title);
     return {
       name: section.name,
       type: section.type,
       category: section.type,
       performanceScore,
-      performanceImpact: Math.round((100 - performanceScore) * 10), // Estimated ms impact
+      performanceImpact: Math.round((100 - performanceScore) * 10),
       recommendations: recs,
-      // Additional data for score breakdown
       hasVideo: section.hasVideo,
       hasLazyLoading: section.hasLazyLoading,
       complexityScore: section.complexityScore,
     };
   });
 
-  // Save to database
-  const [savedAnalysis] = await db.insert(schema.themeAnalyses).values({
-    storeId: store.id,
-    themeId: mainTheme.id.toString(),
-    themeName: mainTheme.name,
-    totalSections: analyzedSections.length,
-    overallScore: scoreBreakdown.overall,
-    scoreSource: coreWebVitals ? 'thememetrics' : 'thememetrics-estimated',
-    lcpMs: coreWebVitals?.lcp ? Math.round(coreWebVitals.lcp) : null,
-    clsScore: coreWebVitals?.cls?.toString() ?? null,
-    tbtMs: coreWebVitals?.tbt ? Math.round(coreWebVitals.tbt) : null,
-    fcpMs: coreWebVitals?.fcp ? Math.round(coreWebVitals.fcp) : null,
-  }).returning();
+  // ---- Save to database ----
+  const [savedAnalysis] = await db
+    .insert(schema.themeAnalyses)
+    .values({
+      storeId: store.id,
+      themeId: mainThemeNumericId,
+      themeName: mainGqlTheme.name,
+      totalSections: analyzedSections.length,
+      overallScore: scoreBreakdown.overall,
+      scoreSource: coreWebVitals ? 'thememetrics' : 'thememetrics-estimated',
+      lcpMs: coreWebVitals?.lcp ? Math.round(coreWebVitals.lcp) : null,
+      clsScore: coreWebVitals?.cls?.toString() ?? null,
+      tbtMs: coreWebVitals?.tbt ? Math.round(coreWebVitals.tbt) : null,
+      fcpMs: coreWebVitals?.fcp ? Math.round(coreWebVitals.fcp) : null,
+    })
+    .returning();
 
-  // Cache the score for fast retrieval (non-blocking)
-  cacheScore(savedAnalysis.id, scoreBreakdown).catch(() => {
-    // Silent fail - cache is optional
-  });
+  cacheScore(savedAnalysis.id, scoreBreakdown).catch(() => {});
 
-  // Save section analyses
   if (sectionsWithRecs.length > 0) {
     await db.insert(schema.sectionAnalyses).values(
-      sectionsWithRecs.map(s => ({
+      sectionsWithRecs.map((s) => ({
         analysisId: savedAnalysis.id,
         sectionName: s.name,
         sectionType: s.type,
@@ -312,62 +317,66 @@ async function runAnalysis(request: NextRequest, bodyShop?: string): Promise<Nex
     );
   }
 
-  // Update theme analyzedAt
-  await db.update(schema.themes).set({ analyzedAt: new Date() }).where(eq(schema.themes.id, theme.id));
+  await db
+    .update(schema.themes)
+    .set({ analyzedAt: new Date() })
+    .where(eq(schema.themes.id, theme.id));
 
-  // Send analysis complete email (async, don't block response)
+  // Send analysis complete email async (non-blocking)
   (async () => {
     try {
-      const [subscription] = await db
+      const [emailSub] = await db
         .select()
         .from(emailSubscriptions)
         .where(eq(emailSubscriptions.storeId, store.id));
 
-      if (subscription && subscription.status === 'active') {
+      if (emailSub && emailSub.status === 'active') {
         const storeName = store.shopDomain.replace('.myshopify.com', '');
-        const criticalCount = sectionsWithRecs.filter(s => s.performanceScore < 50).length;
+        const criticalCount = sectionsWithRecs.filter((s) => s.performanceScore < 50).length;
         const dashboardUrl = `https://thememetrics.de/dashboard?shop=${store.shopDomain}`;
 
         const html = analysisCompleteEmail({
           storeName,
-          themeName: mainTheme.name,
+          themeName: mainGqlTheme.name,
           score: scoreBreakdown.overall,
           criticalCount,
           dashboardUrl,
         });
 
         await sendEmail({
-          to: subscription.email,
-          subject: `Analyse fertig: Score ${scoreBreakdown.overall} für ${mainTheme.name} 📊`,
+          to: emailSub.email,
+          subject: `Analyse fertig: Score ${scoreBreakdown.overall} für ${mainGqlTheme.name} 📊`,
           html,
         });
       }
     } catch (emailError) {
-      captureError(emailError as Error, { tags: { function: 'sendAnalysisCompleteEmail' } });
+      captureError(emailError as Error, {
+        tags: { function: 'sendAnalysisCompleteEmail' },
+      });
     }
   })();
 
   // Limit data based on plan
-  let responseSections = sectionsWithRecs.map(s => ({
+  const responseSections = sectionsWithRecs.map((s) => ({
     name: s.name,
     type: s.type,
     category: s.category,
     performanceScore: s.performanceScore,
     performanceImpact: showSectionDetails ? s.performanceImpact : 0,
-    recommendations: maxRecommendations === -1 
-      ? s.recommendations 
-      : s.recommendations.slice(0, maxRecommendations),
+    recommendations:
+      maxRecommendations === -1
+        ? s.recommendations
+        : s.recommendations.slice(0, maxRecommendations),
     hasVideo: s.hasVideo,
     hasLazyLoading: s.hasLazyLoading,
   }));
 
-  // Build response
   return NextResponse.json({
-    theme: { 
-      id: theme.id, 
-      name: theme.name, 
-      role: theme.role, 
-      analyzedAt: new Date().toISOString() 
+    theme: {
+      id: theme.id,
+      name: theme.name,
+      role: theme.role,
+      analyzedAt: new Date().toISOString(),
     },
     analysis: {
       id: savedAnalysis.id,
@@ -375,7 +384,6 @@ async function runAnalysis(request: NextRequest, bodyShop?: string): Promise<Nex
       sections: responseSections,
       highImpactCount: countProblematicSections(analyzedSections as any),
     },
-    // ThemeMetrics Score (the main attraction!)
     score: {
       overall: scoreBreakdown.overall,
       speed: {
@@ -422,13 +430,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
-    // Validate input
+
     if (body.shop && !isValidShopDomain(body.shop)) {
       return withCors(NextResponse.json({ error: 'Invalid shop domain' }, { status: 400 }));
     }
-    
-    const response = await runAnalysis(request, body.shop);
+
+    const response = await runAnalysis(request);
     return withCors(response);
   } catch (error) {
     captureError(error as Error, { tags: { route: 'themes/analyze', method: 'POST' } });
