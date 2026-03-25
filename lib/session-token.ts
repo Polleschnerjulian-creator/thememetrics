@@ -1,7 +1,5 @@
 import * as crypto from 'crypto';
 
-const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
-
 interface SessionTokenPayload {
   iss: string; // Issuer - the shop's admin URL
   dest: string; // Destination - the shop's domain
@@ -30,46 +28,56 @@ function base64UrlDecode(str: string): string {
  */
 export function verifySessionToken(token: string): SessionTokenPayload | null {
   try {
+    const secret = process.env.SHOPIFY_API_SECRET;
+    if (!secret) { console.error('[TOKEN] No SHOPIFY_API_SECRET'); return null; }
+
     const parts = token.split('.');
-    if (parts.length !== 3) {
-      return null;
-    }
+    if (parts.length !== 3) { console.error('[TOKEN] Not 3 parts:', parts.length); return null; }
 
     const [headerB64, payloadB64, signatureB64] = parts;
+
+    // Decode payload first for debugging
+    const payload = JSON.parse(base64UrlDecode(payloadB64)) as SessionTokenPayload;
+    console.log('[TOKEN] Payload: iss=' + payload.iss + ' dest=' + payload.dest + ' aud=' + payload.aud + ' exp=' + payload.exp);
 
     // Verify signature using HMAC SHA-256
     const signatureInput = `${headerB64}.${payloadB64}`;
     const expectedSignature = crypto
-      .createHmac('sha256', SHOPIFY_API_SECRET)
+      .createHmac('sha256', secret)
       .update(signatureInput)
       .digest('base64url');
 
-    if (signatureB64 !== expectedSignature) {
+    // Timing-safe comparison
+    const sigBuf = Buffer.from(signatureB64);
+    const expBuf = Buffer.from(expectedSignature);
+    if (sigBuf.length !== expBuf.length) {
+      console.error('[TOKEN] Sig length mismatch: got=' + sigBuf.length + ' expected=' + expBuf.length);
+      console.error('[TOKEN] Got sig=' + signatureB64.substring(0, 20) + ' expected=' + expectedSignature.substring(0, 20));
       return null;
     }
-
-    // Decode and parse payload
-    const payload = JSON.parse(base64UrlDecode(payloadB64)) as SessionTokenPayload;
+    if (!crypto.timingSafeEqual(sigBuf, expBuf)) {
+      console.error('[TOKEN] Sig mismatch (same length). Secret prefix=' + secret.substring(0, 10));
+      return null;
+    }
 
     // Verify expiration
     const now = Math.floor(Date.now() / 1000);
-    if (payload.exp < now) {
-      return null;
-    }
+    if (payload.exp < now) { console.error('[TOKEN] Expired: exp=' + payload.exp + ' now=' + now); return null; }
 
     // Verify not before
-    if (payload.nbf > now) {
-      return null;
-    }
+    if (payload.nbf > now) { console.error('[TOKEN] Not yet valid: nbf=' + payload.nbf + ' now=' + now); return null; }
 
     // Verify audience (should match our API key)
     const expectedAudience = process.env.SHOPIFY_API_KEY;
     if (expectedAudience && payload.aud !== expectedAudience) {
+      console.error('[TOKEN] Audience mismatch: got=' + payload.aud + ' expected=' + expectedAudience);
       return null;
     }
 
+    console.log('[TOKEN] Verified OK for ' + payload.dest);
     return payload;
   } catch (error) {
+    console.error('[TOKEN] Exception:', (error as Error).message);
     return null;
   }
 }
@@ -110,19 +118,10 @@ export function getSessionTokenFromRequest(request: Request): string | null {
  */
 export function verifyRequestAndGetShop(request: Request): string | null {
   const token = getSessionTokenFromRequest(request);
-  
-  if (!token) {
-    // Fallback to query param or header for non-embedded requests
-    const url = new URL(request.url);
-    const shopFromQuery = url.searchParams.get('shop');
-    const shopFromHeader = request.headers.get('X-Shop-Domain');
-    return shopFromQuery || shopFromHeader || null;
-  }
+  if (!token) return null;
 
   const payload = verifySessionToken(token);
-  if (!payload) {
-    return null;
-  }
+  if (!payload) return null;
 
   return getShopFromToken(payload);
 }

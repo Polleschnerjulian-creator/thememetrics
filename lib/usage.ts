@@ -59,30 +59,27 @@ export async function checkAndIncrementUsage(
 ): Promise<UsageResult> {
   const currentMonth = getCurrentMonth();
   const column = ACTION_COLUMNS[action];
-
-  // First, check the current count without incrementing
-  const checkResult = await db.execute<{ count: number }>(sql`
-    SELECT COALESCE(${sql.raw(column)}, 0) as count
-    FROM usage_tracking
-    WHERE store_id = ${storeId} AND month = ${currentMonth}
-  `);
-
-  const currentCount = checkResult.rows[0]?.count ?? 0;
   const limit = getActionLimit(planId, action);
 
-  // Check if action is allowed
-  const check = canPerformAction(planId, action, currentCount);
-
-  if (!check.allowed) {
-    return {
-      allowed: false,
-      currentCount,
-      limit,
-      error: check.reason || 'Monatliches Limit erreicht',
-    };
+  // For unlimited plans (-1), always allow and just increment
+  if (limit === -1) {
+    const result = await db.execute<{ new_count: number }>(sql`
+      INSERT INTO usage_tracking (store_id, month, ${sql.raw(column)}, created_at, updated_at)
+      VALUES (${storeId}, ${currentMonth}, 1, NOW(), NOW())
+      ON CONFLICT (store_id, month)
+      DO UPDATE SET
+        ${sql.raw(column)} = COALESCE(usage_tracking.${sql.raw(column)}, 0) + 1,
+        updated_at = NOW()
+      RETURNING ${sql.raw(column)} as new_count
+    `);
+    return { allowed: true, currentCount: result.rows[0]?.new_count ?? 1, limit: -1 };
   }
 
-  // Atomically increment the counter using UPSERT
+  // Atomic check-and-increment: only increments if current count < limit.
+  // Uses PostgreSQL row-level locking to prevent race conditions.
+  // - Fresh INSERT (no conflict): always succeeds, count = 1
+  // - UPDATE path: only fires if WHERE condition passes (count < limit)
+  // - If count >= limit, UPDATE is skipped and no row is returned
   const result = await db.execute<{ new_count: number }>(sql`
     INSERT INTO usage_tracking (store_id, month, ${sql.raw(column)}, created_at, updated_at)
     VALUES (${storeId}, ${currentMonth}, 1, NOW(), NOW())
@@ -90,17 +87,23 @@ export async function checkAndIncrementUsage(
     DO UPDATE SET
       ${sql.raw(column)} = COALESCE(usage_tracking.${sql.raw(column)}, 0) + 1,
       updated_at = NOW()
+    WHERE COALESCE(usage_tracking.${sql.raw(column)}, 0) < ${limit}
     RETURNING ${sql.raw(column)} as new_count
   `);
 
-  const newCount = result.rows[0]?.new_count ?? 1;
-
-  // Double-check the limit after increment (belt and suspenders)
-  const postCheck = canPerformAction(planId, action, newCount - 1);
+  if (result.rows.length === 0) {
+    // No row returned = WHERE condition failed = limit already reached
+    return {
+      allowed: false,
+      currentCount: limit,
+      limit,
+      error: `Monatliches Limit von ${limit} erreicht`,
+    };
+  }
 
   return {
-    allowed: postCheck.allowed,
-    currentCount: newCount,
+    allowed: true,
+    currentCount: result.rows[0].new_count,
     limit,
   };
 }

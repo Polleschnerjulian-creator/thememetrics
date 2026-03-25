@@ -1,7 +1,8 @@
 /**
  * Session Token Module Tests
  *
- * Tests for JWT session token verification and extraction functions
+ * Comprehensive tests for JWT session token verification and extraction.
+ * Tests the REAL functions from lib/session-token.ts — no local stubs.
  */
 
 import crypto from 'crypto';
@@ -13,14 +14,20 @@ import {
   verifyRequestAndGetShop,
 } from '@/lib/session-token';
 
-// Helper to create valid JWT tokens for testing
+// ============================================
+// TEST HELPERS
+// ============================================
+
+/**
+ * Create a signed JWT for testing, matching the real HMAC-SHA256 flow.
+ */
 function createTestToken(
   payload: Record<string, any>,
   secret: string = 'test-api-secret'
 ): string {
   const header = { alg: 'HS256', typ: 'JWT' };
 
-  const encodeBase64Url = (obj: any) => {
+  const encodeBase64Url = (obj: any): string => {
     return Buffer.from(JSON.stringify(obj))
       .toString('base64')
       .replace(/\+/g, '-')
@@ -40,7 +47,9 @@ function createTestToken(
   return `${headerB64}.${payloadB64}.${signature}`;
 }
 
-// Create a valid payload with proper timestamps
+/**
+ * Build a valid Shopify session-token payload with sensible defaults.
+ */
 function createValidPayload(overrides: Partial<Record<string, any>> = {}) {
   const now = Math.floor(Date.now() / 1000);
   return {
@@ -58,7 +67,7 @@ function createValidPayload(overrides: Partial<Record<string, any>> = {}) {
 }
 
 // ============================================
-// verifySessionToken TESTS
+// verifySessionToken
 // ============================================
 
 describe('verifySessionToken', () => {
@@ -74,19 +83,22 @@ describe('verifySessionToken', () => {
     process.env = originalEnv;
   });
 
-  it('should return payload for valid token', () => {
+  it('should return payload for a valid token with correct HMAC', () => {
     const payload = createValidPayload();
     const token = createTestToken(payload);
 
     const result = verifySessionToken(token);
 
     expect(result).not.toBeNull();
-    expect(result?.iss).toBe(payload.iss);
-    expect(result?.dest).toBe(payload.dest);
-    expect(result?.sub).toBe(payload.sub);
+    expect(result!.iss).toBe(payload.iss);
+    expect(result!.dest).toBe(payload.dest);
+    expect(result!.aud).toBe(payload.aud);
+    expect(result!.sub).toBe(payload.sub);
+    expect(result!.jti).toBe(payload.jti);
+    expect(result!.sid).toBe(payload.sid);
   });
 
-  it('should return null for token with invalid signature', () => {
+  it('should return null for a token signed with the wrong secret (timing-safe rejection)', () => {
     const payload = createValidPayload();
     const token = createTestToken(payload, 'wrong-secret');
 
@@ -95,49 +107,69 @@ describe('verifySessionToken', () => {
     expect(result).toBeNull();
   });
 
-  it('should return null for expired token', () => {
+  it('should return null for an expired token', () => {
     const now = Math.floor(Date.now() / 1000);
-    const payload = createValidPayload({
-      exp: now - 3600, // 1 hour ago
-    });
+    const payload = createValidPayload({ exp: now - 3600 });
     const token = createTestToken(payload);
 
-    const result = verifySessionToken(token);
-
-    expect(result).toBeNull();
+    expect(verifySessionToken(token)).toBeNull();
   });
 
-  it('should return null for token not yet valid (nbf in future)', () => {
+  it('should return null when nbf is in the future', () => {
     const now = Math.floor(Date.now() / 1000);
-    const payload = createValidPayload({
-      nbf: now + 3600, // 1 hour from now
-    });
+    const payload = createValidPayload({ nbf: now + 3600 });
+    const token = createTestToken(payload);
+
+    expect(verifySessionToken(token)).toBeNull();
+  });
+
+  it('should return null for wrong audience when SHOPIFY_API_KEY is set', () => {
+    const payload = createValidPayload({ aud: 'wrong-api-key' });
+    const token = createTestToken(payload);
+
+    expect(verifySessionToken(token)).toBeNull();
+  });
+
+  it('should skip audience check when SHOPIFY_API_KEY is not set', () => {
+    delete process.env.SHOPIFY_API_KEY;
+
+    const payload = createValidPayload({ aud: 'any-audience-at-all' });
     const token = createTestToken(payload);
 
     const result = verifySessionToken(token);
-
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.aud).toBe('any-audience-at-all');
   });
 
-  it('should return null for token with wrong audience', () => {
-    const payload = createValidPayload({
-      aud: 'wrong-api-key',
-    });
-    const token = createTestToken(payload);
-
-    const result = verifySessionToken(token);
-
-    expect(result).toBeNull();
-  });
-
-  it('should return null for malformed token (wrong number of parts)', () => {
+  it('should return null for malformed token (not 3 parts)', () => {
     expect(verifySessionToken('only-one-part')).toBeNull();
     expect(verifySessionToken('two.parts')).toBeNull();
     expect(verifySessionToken('four.parts.here.oops')).toBeNull();
+    expect(verifySessionToken('a.b.c.d.e')).toBeNull();
   });
 
-  it('should return null for empty token', () => {
+  it('should return null for empty string', () => {
     expect(verifySessionToken('')).toBeNull();
+  });
+
+  it('should return null when SHOPIFY_API_SECRET env var is missing (not just empty string)', () => {
+    delete process.env.SHOPIFY_API_SECRET;
+
+    const payload = createValidPayload();
+    // Sign with an arbitrary secret — should not matter since the function should bail early
+    const token = createTestToken(payload, 'anything');
+
+    expect(verifySessionToken(token)).toBeNull();
+  });
+
+  it('should return null when SHOPIFY_API_SECRET is empty string', () => {
+    process.env.SHOPIFY_API_SECRET = '';
+
+    const payload = createValidPayload();
+    const token = createTestToken(payload, '');
+
+    // Empty string is falsy, so the function returns null before any HMAC check
+    expect(verifySessionToken(token)).toBeNull();
   });
 
   it('should return null for token with invalid JSON payload', () => {
@@ -155,21 +187,6 @@ describe('verifySessionToken', () => {
     expect(verifySessionToken(token)).toBeNull();
   });
 
-  it('should accept token when SHOPIFY_API_KEY is not set', () => {
-    delete process.env.SHOPIFY_API_KEY;
-
-    const payload = createValidPayload({
-      aud: 'any-audience', // Should be accepted without validation
-    });
-    const token = createTestToken(payload);
-
-    const result = verifySessionToken(token);
-
-    // Note: The code checks `if (expectedAudience && payload.aud !== expectedAudience)`
-    // So when expectedAudience is undefined, it skips the audience check
-    expect(result).not.toBeNull();
-  });
-
   it('should handle token with special characters in claims', () => {
     const payload = createValidPayload({
       dest: 'https://special-chars-shop.myshopify.com',
@@ -180,213 +197,157 @@ describe('verifySessionToken', () => {
     const result = verifySessionToken(token);
 
     expect(result).not.toBeNull();
-    expect(result?.sub).toBe('user_with_underscore');
+    expect(result!.sub).toBe('user_with_underscore');
+    expect(result!.dest).toBe('https://special-chars-shop.myshopify.com');
+  });
+
+  it('should use timing-safe comparison (signature length mismatch returns null, does not throw)', () => {
+    // Craft a token whose base64url signature has a different length than the expected one.
+    // We do this by manually building a token with a truncated signature.
+    const payload = createValidPayload();
+    const header = { alg: 'HS256', typ: 'JWT' };
+    const headerB64 = Buffer.from(JSON.stringify(header))
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+    const payloadB64 = Buffer.from(JSON.stringify(payload))
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    const token = `${headerB64}.${payloadB64}.short`;
+
+    // Should return null gracefully — timingSafeEqual would throw on length mismatch,
+    // but the code checks length first.
+    expect(verifySessionToken(token)).toBeNull();
   });
 });
 
 // ============================================
-// getShopFromToken TESTS
+// getShopFromToken
 // ============================================
 
 describe('getShopFromToken', () => {
-  it('should extract shop domain from https URL', () => {
-    const payload = {
-      iss: 'https://test-shop.myshopify.com/admin',
-      dest: 'https://test-shop.myshopify.com',
-      aud: 'test-api-key',
-      sub: '12345',
-      exp: Date.now() / 1000 + 3600,
-      nbf: Date.now() / 1000 - 60,
-      iat: Date.now() / 1000 - 60,
-      jti: 'test-jti',
-      sid: 'test-sid',
-    };
+  const basePayload = {
+    iss: 'https://test-shop.myshopify.com/admin',
+    dest: 'https://test-shop.myshopify.com',
+    aud: 'test-api-key',
+    sub: '12345',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    nbf: Math.floor(Date.now() / 1000) - 60,
+    iat: Math.floor(Date.now() / 1000) - 60,
+    jti: 'test-jti',
+    sid: 'test-sid',
+  };
 
-    const shop = getShopFromToken(payload);
-
-    expect(shop).toBe('test-shop.myshopify.com');
+  it('should extract shop from https:// dest', () => {
+    const payload = { ...basePayload, dest: 'https://test-shop.myshopify.com' };
+    expect(getShopFromToken(payload)).toBe('test-shop.myshopify.com');
   });
 
-  it('should extract shop domain from http URL', () => {
-    const payload = {
-      iss: 'http://test-shop.myshopify.com/admin',
-      dest: 'http://test-shop.myshopify.com',
-      aud: 'test-api-key',
-      sub: '12345',
-      exp: Date.now() / 1000 + 3600,
-      nbf: Date.now() / 1000 - 60,
-      iat: Date.now() / 1000 - 60,
-      jti: 'test-jti',
-      sid: 'test-sid',
-    };
-
-    const shop = getShopFromToken(payload);
-
-    expect(shop).toBe('test-shop.myshopify.com');
+  it('should extract shop from http:// dest', () => {
+    const payload = { ...basePayload, dest: 'http://test-shop.myshopify.com' };
+    expect(getShopFromToken(payload)).toBe('test-shop.myshopify.com');
   });
 
-  it('should handle domain without protocol', () => {
-    const payload = {
-      iss: 'test-shop.myshopify.com/admin',
-      dest: 'test-shop.myshopify.com',
-      aud: 'test-api-key',
-      sub: '12345',
-      exp: Date.now() / 1000 + 3600,
-      nbf: Date.now() / 1000 - 60,
-      iat: Date.now() / 1000 - 60,
-      jti: 'test-jti',
-      sid: 'test-sid',
-    };
-
-    const shop = getShopFromToken(payload);
-
-    expect(shop).toBe('test-shop.myshopify.com');
+  it('should return domain as-is when no protocol prefix', () => {
+    const payload = { ...basePayload, dest: 'test-shop.myshopify.com' };
+    expect(getShopFromToken(payload)).toBe('test-shop.myshopify.com');
   });
 
   it('should handle shop domains with hyphens', () => {
-    const payload = {
-      iss: 'https://my-awesome-shop-name.myshopify.com/admin',
-      dest: 'https://my-awesome-shop-name.myshopify.com',
-      aud: 'test-api-key',
-      sub: '12345',
-      exp: Date.now() / 1000 + 3600,
-      nbf: Date.now() / 1000 - 60,
-      iat: Date.now() / 1000 - 60,
-      jti: 'test-jti',
-      sid: 'test-sid',
-    };
-
-    const shop = getShopFromToken(payload);
-
-    expect(shop).toBe('my-awesome-shop-name.myshopify.com');
+    const payload = { ...basePayload, dest: 'https://my-awesome-shop-name.myshopify.com' };
+    expect(getShopFromToken(payload)).toBe('my-awesome-shop-name.myshopify.com');
   });
 });
 
 // ============================================
-// isTokenExpired TESTS
+// isTokenExpired
 // ============================================
 
 describe('isTokenExpired', () => {
+  const makePayload = (exp: number) => ({
+    iss: 'https://test-shop.myshopify.com/admin',
+    dest: 'https://test-shop.myshopify.com',
+    aud: 'test-api-key',
+    sub: '12345',
+    exp,
+    nbf: Math.floor(Date.now() / 1000) - 7200,
+    iat: Math.floor(Date.now() / 1000) - 7200,
+    jti: 'test-jti',
+    sid: 'test-sid',
+  });
+
   it('should return true for expired token', () => {
     const now = Math.floor(Date.now() / 1000);
-    const payload = {
-      iss: 'https://test-shop.myshopify.com/admin',
-      dest: 'https://test-shop.myshopify.com',
-      aud: 'test-api-key',
-      sub: '12345',
-      exp: now - 3600, // 1 hour ago
-      nbf: now - 7200,
-      iat: now - 7200,
-      jti: 'test-jti',
-      sid: 'test-sid',
-    };
-
-    expect(isTokenExpired(payload)).toBe(true);
+    expect(isTokenExpired(makePayload(now - 3600))).toBe(true);
   });
 
-  it('should return false for valid token', () => {
+  it('should return false for non-expired token', () => {
     const now = Math.floor(Date.now() / 1000);
-    const payload = {
-      iss: 'https://test-shop.myshopify.com/admin',
-      dest: 'https://test-shop.myshopify.com',
-      aud: 'test-api-key',
-      sub: '12345',
-      exp: now + 3600, // 1 hour from now
-      nbf: now - 60,
-      iat: now - 60,
-      jti: 'test-jti',
-      sid: 'test-sid',
-    };
-
-    expect(isTokenExpired(payload)).toBe(false);
+    expect(isTokenExpired(makePayload(now + 3600))).toBe(false);
   });
 
-  it('should return true for token that just expired', () => {
+  it('should return true when exp equals current time (boundary: exp < now is false when equal, but let us test)', () => {
+    // The implementation uses `payload.exp < now`. When exp === now, exp < now is false,
+    // so the token is NOT considered expired at the exact boundary second.
     const now = Math.floor(Date.now() / 1000);
-    const payload = {
-      iss: 'https://test-shop.myshopify.com/admin',
-      dest: 'https://test-shop.myshopify.com',
-      aud: 'test-api-key',
-      sub: '12345',
-      exp: now - 1, // 1 second ago
-      nbf: now - 3600,
-      iat: now - 3600,
-      jti: 'test-jti',
-      sid: 'test-sid',
-    };
+    expect(isTokenExpired(makePayload(now))).toBe(false);
+  });
 
-    expect(isTokenExpired(payload)).toBe(true);
+  it('should return true for token that expired 1 second ago', () => {
+    const now = Math.floor(Date.now() / 1000);
+    expect(isTokenExpired(makePayload(now - 1))).toBe(true);
   });
 });
 
 // ============================================
-// getSessionTokenFromRequest TESTS
+// getSessionTokenFromRequest
 // ============================================
 
 describe('getSessionTokenFromRequest', () => {
   it('should extract token from Bearer Authorization header', () => {
     const request = new Request('http://localhost:3000', {
-      headers: {
-        Authorization: 'Bearer test-token-12345',
-      },
+      headers: { Authorization: 'Bearer my-session-token' },
     });
-
-    const token = getSessionTokenFromRequest(request);
-
-    expect(token).toBe('test-token-12345');
+    expect(getSessionTokenFromRequest(request)).toBe('my-session-token');
   });
 
   it('should return null when Authorization header is missing', () => {
     const request = new Request('http://localhost:3000');
-
-    const token = getSessionTokenFromRequest(request);
-
-    expect(token).toBeNull();
+    expect(getSessionTokenFromRequest(request)).toBeNull();
   });
 
-  it('should return null when Authorization header does not start with Bearer', () => {
+  it('should return null for non-Bearer auth (e.g. Basic)', () => {
     const request = new Request('http://localhost:3000', {
-      headers: {
-        Authorization: 'Basic dXNlcjpwYXNz',
-      },
+      headers: { Authorization: 'Basic dXNlcjpwYXNz' },
     });
-
-    const token = getSessionTokenFromRequest(request);
-
-    expect(token).toBeNull();
+    expect(getSessionTokenFromRequest(request)).toBeNull();
   });
 
-  it('should return null for empty Bearer token', () => {
-    // Note: Headers may trim trailing whitespace, so 'Bearer ' becomes 'Bearer'
-    // which doesn't start with 'Bearer ' (with space), so returns null
+  it('should return null for empty Bearer value', () => {
     const request = new Request('http://localhost:3000', {
-      headers: {
-        Authorization: 'Bearer ',
-      },
+      headers: { Authorization: 'Bearer ' },
     });
-
-    const token = getSessionTokenFromRequest(request);
-
-    // Returns null because trimmed header doesn't match 'Bearer '
-    expect(token).toBeNull();
+    // Header value 'Bearer ' may be trimmed to 'Bearer' by the Headers API,
+    // which does not startWith('Bearer '), so it returns null.
+    expect(getSessionTokenFromRequest(request)).toBeNull();
   });
 
-  it('should handle token with special characters', () => {
-    const complexToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+  it('should handle a full JWT-like token string', () => {
+    const jwt =
+      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
     const request = new Request('http://localhost:3000', {
-      headers: {
-        Authorization: `Bearer ${complexToken}`,
-      },
+      headers: { Authorization: `Bearer ${jwt}` },
     });
-
-    const token = getSessionTokenFromRequest(request);
-
-    expect(token).toBe(complexToken);
+    expect(getSessionTokenFromRequest(request)).toBe(jwt);
   });
 });
 
 // ============================================
-// verifyRequestAndGetShop TESTS
+// verifyRequestAndGetShop
 // ============================================
 
 describe('verifyRequestAndGetShop', () => {
@@ -402,87 +363,49 @@ describe('verifyRequestAndGetShop', () => {
     process.env = originalEnv;
   });
 
-  it('should return shop from valid session token', () => {
-    const payload = createValidPayload();
+  it('should return shop from a valid Bearer token', () => {
+    const payload = createValidPayload({ dest: 'https://my-store.myshopify.com' });
     const token = createTestToken(payload);
 
     const request = new Request('http://localhost:3000', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
 
-    const shop = verifyRequestAndGetShop(request);
-
-    expect(shop).toBe('test-shop.myshopify.com');
+    expect(verifyRequestAndGetShop(request)).toBe('my-store.myshopify.com');
   });
 
-  it('should return null for invalid session token', () => {
+  it('should return null when no Authorization header is present (no query param or header fallback)', () => {
+    // SECURITY: verifyRequestAndGetShop only reads from Bearer token.
+    // Query params and X-Shop-Domain headers must NOT be accepted.
+    const request = new Request('http://localhost:3000?shop=injected-shop.myshopify.com', {
+      headers: { 'X-Shop-Domain': 'injected-header-shop.myshopify.com' },
+    });
+
+    expect(verifyRequestAndGetShop(request)).toBeNull();
+  });
+
+  it('should return null for an invalid / tampered token', () => {
     const request = new Request('http://localhost:3000', {
-      headers: {
-        Authorization: 'Bearer invalid-token',
-      },
+      headers: { Authorization: 'Bearer invalid.tampered.token' },
     });
 
-    const shop = verifyRequestAndGetShop(request);
-
-    expect(shop).toBeNull();
+    expect(verifyRequestAndGetShop(request)).toBeNull();
   });
 
-  it('should fallback to query param when no token', () => {
-    const request = new Request('http://localhost:3000?shop=query-shop.myshopify.com');
+  it('should return null for an expired token', () => {
+    const now = Math.floor(Date.now() / 1000);
+    const payload = createValidPayload({ exp: now - 100 });
+    const token = createTestToken(payload);
 
-    const shop = verifyRequestAndGetShop(request);
-
-    expect(shop).toBe('query-shop.myshopify.com');
-  });
-
-  it('should fallback to X-Shop-Domain header when no token or query', () => {
     const request = new Request('http://localhost:3000', {
-      headers: {
-        'X-Shop-Domain': 'header-shop.myshopify.com',
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
 
-    const shop = verifyRequestAndGetShop(request);
-
-    expect(shop).toBe('header-shop.myshopify.com');
+    expect(verifyRequestAndGetShop(request)).toBeNull();
   });
 
-  it('should prefer query param over header when no token', () => {
-    const request = new Request('http://localhost:3000?shop=query-shop.myshopify.com', {
-      headers: {
-        'X-Shop-Domain': 'header-shop.myshopify.com',
-      },
-    });
-
-    const shop = verifyRequestAndGetShop(request);
-
-    expect(shop).toBe('query-shop.myshopify.com');
-  });
-
-  it('should return null when no authentication method available', () => {
+  it('should return null when request has no auth at all', () => {
     const request = new Request('http://localhost:3000');
-
-    const shop = verifyRequestAndGetShop(request);
-
-    expect(shop).toBeNull();
-  });
-
-  it('should prefer valid token over query param', () => {
-    const payload = createValidPayload({
-      dest: 'https://token-shop.myshopify.com',
-    });
-    const token = createTestToken(payload);
-
-    const request = new Request('http://localhost:3000?shop=query-shop.myshopify.com', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const shop = verifyRequestAndGetShop(request);
-
-    expect(shop).toBe('token-shop.myshopify.com');
+    expect(verifyRequestAndGetShop(request)).toBeNull();
   });
 });

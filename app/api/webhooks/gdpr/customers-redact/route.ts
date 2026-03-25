@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       tags: { webhook: 'customers/redact' },
       extra: {
         shop_domain: data.shop_domain,
-        customer_id: data.customer?.id,
+        processed: true,
       }
     });
 

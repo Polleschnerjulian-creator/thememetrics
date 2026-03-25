@@ -218,6 +218,7 @@ export default function PerformancePage() {
     if (hasRunOnce && customUrl && !isLoading) {
       runAnalysis();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [strategy]);
 
   const runAnalysis = async (url?: string) => {

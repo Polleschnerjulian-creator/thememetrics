@@ -11,6 +11,7 @@ process.env.NEXT_PUBLIC_APP_URL = 'https://test.example.com';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
 process.env.CRON_SECRET = 'test-cron-secret';
 process.env.PAGESPEED_API_KEY = 'test-pagespeed-key';
+process.env.SESSION_SECRET = 'test-session-secret';
 
 // Extend Jest matchers
 import '@testing-library/jest-dom';

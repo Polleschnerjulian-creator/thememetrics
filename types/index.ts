@@ -3,7 +3,7 @@ export interface Store {
   id: string;
   shopDomain: string;
   accessToken: string;
-  plan: 'starter' | 'fashion_pro' | 'agency';
+  plan: 'free' | 'starter' | 'pro' | 'agency';
   status: 'active' | 'inactive' | 'uninstalled';
   installedAt: Date;
   createdAt: Date;

@@ -1,259 +1,610 @@
 /**
  * Cache Layer Tests
+ *
+ * Comprehensive tests for all cache operations, including actual Redis
+ * interactions via mocking, graceful degradation, and specialized functions.
  */
 
-import { CACHE_KEYS, CACHE_TTL, buildCacheKey } from '@/lib/cache';
+// Set up Redis env vars BEFORE the module loads
+process.env.UPSTASH_REDIS_URL = 'https://fake-redis.upstash.io';
+process.env.UPSTASH_REDIS_TOKEN = 'fake-token';
 
-describe('Cache Layer', () => {
-  describe('Cache Keys', () => {
-    it('should have all required cache key prefixes', () => {
-      expect(CACHE_KEYS.PAGESPEED).toBe('pagespeed');
-      expect(CACHE_KEYS.SCORE).toBe('score');
-      expect(CACHE_KEYS.SUBSCRIPTION).toBe('subscription');
-      expect(CACHE_KEYS.RATE_LIMIT).toBe('ratelimit');
-      expect(CACHE_KEYS.DASHBOARD).toBe('dashboard');
-    });
+const mockPipelineExec = jest.fn();
+const mockPipeline = {
+  incr: jest.fn(),
+  expire: jest.fn(),
+  exec: mockPipelineExec,
+};
+
+const mockRedis = {
+  get: jest.fn(),
+  set: jest.fn(),
+  del: jest.fn(),
+  keys: jest.fn(),
+  scan: jest.fn(),
+  incr: jest.fn(),
+  expire: jest.fn(),
+  exists: jest.fn(),
+  ttl: jest.fn(),
+  ping: jest.fn(),
+  pipeline: jest.fn().mockReturnValue(mockPipeline),
+};
+
+jest.mock('@upstash/redis', () => ({
+  Redis: jest.fn().mockImplementation(() => mockRedis),
+}));
+
+import {
+  CACHE_KEYS,
+  CACHE_TTL,
+  buildCacheKey,
+  cacheGet,
+  cacheSet,
+  cacheDelete,
+  cacheDeletePattern,
+  cacheExists,
+  cacheIncrement,
+  cacheTTL,
+  cacheThrough,
+  cacheHealthCheck,
+  cachePageSpeed,
+  getCachedPageSpeed,
+  cacheScore,
+  getCachedScore,
+  cacheSubscription,
+  getCachedSubscription,
+  invalidateSubscriptionCache,
+  invalidateShopCaches,
+} from '@/lib/cache';
+
+// ============================================
+// SETUP
+// ============================================
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockPipeline.incr.mockClear();
+  mockPipeline.expire.mockClear();
+  mockPipelineExec.mockClear();
+  mockRedis.pipeline.mockReturnValue(mockPipeline);
+});
+
+// ============================================
+// buildCacheKey TESTS
+// ============================================
+
+describe('buildCacheKey', () => {
+  it('should build key with single part', () => {
+    const key = buildCacheKey('PAGESPEED', 'test.myshopify.com');
+    expect(key).toBe('pagespeed:test.myshopify.com');
   });
 
-  describe('Cache TTL', () => {
-    it('should have correct TTL for PageSpeed', () => {
-      expect(CACHE_TTL.PAGESPEED).toBe(24 * 60 * 60); // 24 hours
-    });
-
-    it('should have TTL of 0 for scores (never expires)', () => {
-      expect(CACHE_TTL.SCORE).toBe(0);
-    });
-
-    it('should have 1 hour TTL for subscriptions', () => {
-      expect(CACHE_TTL.SUBSCRIPTION).toBe(60 * 60);
-    });
-
-    it('should have 1 minute TTL for rate limiting', () => {
-      expect(CACHE_TTL.RATE_LIMIT).toBe(60);
-    });
-
-    it('should have 5 minutes TTL for dashboard', () => {
-      expect(CACHE_TTL.DASHBOARD).toBe(5 * 60);
-    });
-
-    it('should have standard TTL helpers', () => {
-      expect(CACHE_TTL.SHORT).toBe(60);
-      expect(CACHE_TTL.MEDIUM).toBe(15 * 60);
-      expect(CACHE_TTL.LONG).toBe(60 * 60);
-    });
+  it('should build key with multiple parts', () => {
+    const key = buildCacheKey('PAGESPEED', 'test.myshopify.com', 'mobile');
+    expect(key).toBe('pagespeed:test.myshopify.com:mobile');
   });
 
-  describe('buildCacheKey', () => {
-    it('should build key with single part', () => {
-      const key = buildCacheKey('PAGESPEED', 'test.myshopify.com');
-      expect(key).toBe('pagespeed:test.myshopify.com');
-    });
-
-    it('should build key with multiple parts', () => {
-      const key = buildCacheKey('PAGESPEED', 'test.myshopify.com', 'mobile');
-      expect(key).toBe('pagespeed:test.myshopify.com:mobile');
-    });
-
-    it('should build score cache key', () => {
-      const key = buildCacheKey('SCORE', '12345');
-      expect(key).toBe('score:12345');
-    });
-
-    it('should build subscription cache key', () => {
-      const key = buildCacheKey('SUBSCRIPTION', 'shop.myshopify.com');
-      expect(key).toBe('subscription:shop.myshopify.com');
-    });
-
-    it('should build rate limit key', () => {
-      const key = buildCacheKey('RATE_LIMIT', '192.168.1.1', '2026-01');
-      expect(key).toBe('ratelimit:192.168.1.1:2026-01');
-    });
+  it('should build score cache key', () => {
+    const key = buildCacheKey('SCORE', '12345');
+    expect(key).toBe('score:12345');
   });
 
-  describe('Cache Key Format', () => {
-    it('should use colon as separator', () => {
-      const key = buildCacheKey('DASHBOARD', 'shop', 'data');
-      expect(key).toContain(':');
-      expect(key.split(':').length).toBe(3);
-    });
-
-    it('should preserve special characters in parts', () => {
-      const key = buildCacheKey('PAGESPEED', 'my-shop.myshopify.com', 'mobile');
-      expect(key).toBe('pagespeed:my-shop.myshopify.com:mobile');
-    });
+  it('should build subscription cache key', () => {
+    const key = buildCacheKey('SUBSCRIPTION', 'shop.myshopify.com');
+    expect(key).toBe('subscription:shop.myshopify.com');
   });
 
-  describe('Score Caching Logic', () => {
-    // Test the logic that would be used for score caching
-
-    interface ScoreBreakdown {
-      overall: number;
-      speed: number;
-      quality: number;
-      conversion: number;
-    }
-
-    function serializeScore(score: ScoreBreakdown): string {
-      return JSON.stringify(score);
-    }
-
-    function deserializeScore(serialized: string): ScoreBreakdown | null {
-      try {
-        return JSON.parse(serialized);
-      } catch {
-        return null;
-      }
-    }
-
-    it('should serialize score breakdown', () => {
-      const score: ScoreBreakdown = {
-        overall: 75,
-        speed: 80,
-        quality: 70,
-        conversion: 75,
-      };
-      const serialized = serializeScore(score);
-      expect(typeof serialized).toBe('string');
-      expect(serialized).toContain('75');
-    });
-
-    it('should deserialize score breakdown', () => {
-      const serialized = '{"overall":75,"speed":80,"quality":70,"conversion":75}';
-      const score = deserializeScore(serialized);
-      expect(score).not.toBeNull();
-      expect(score?.overall).toBe(75);
-      expect(score?.speed).toBe(80);
-    });
-
-    it('should return null for invalid JSON', () => {
-      const score = deserializeScore('invalid json');
-      expect(score).toBeNull();
-    });
+  it('should build rate limit key', () => {
+    const key = buildCacheKey('RATE_LIMIT', '192.168.1.1', '2026-01');
+    expect(key).toBe('ratelimit:192.168.1.1:2026-01');
   });
 
-  describe('PageSpeed Caching Logic', () => {
-    interface PageSpeedData {
-      lcp: number;
-      fcp: number;
-      cls: number;
-      tbt: number;
-      strategy: 'mobile' | 'desktop';
-    }
+  it('should build dashboard key', () => {
+    const key = buildCacheKey('DASHBOARD', 'shop', 'overview');
+    expect(key).toBe('dashboard:shop:overview');
+  });
+});
 
-    function isValidPageSpeedData(data: unknown): data is PageSpeedData {
-      if (!data || typeof data !== 'object') return false;
-      const d = data as Record<string, unknown>;
-      return (
-        typeof d.lcp === 'number' &&
-        typeof d.fcp === 'number' &&
-        typeof d.cls === 'number' &&
-        typeof d.tbt === 'number' &&
-        (d.strategy === 'mobile' || d.strategy === 'desktop')
-      );
-    }
+// ============================================
+// CACHE_KEYS and CACHE_TTL TESTS
+// ============================================
 
-    it('should validate correct PageSpeed data', () => {
-      const data: PageSpeedData = {
-        lcp: 2500,
-        fcp: 1800,
-        cls: 0.1,
-        tbt: 200,
-        strategy: 'mobile',
-      };
-      expect(isValidPageSpeedData(data)).toBe(true);
-    });
+describe('CACHE_KEYS', () => {
+  it('should have all required prefixes', () => {
+    expect(CACHE_KEYS.PAGESPEED).toBe('pagespeed');
+    expect(CACHE_KEYS.SCORE).toBe('score');
+    expect(CACHE_KEYS.SUBSCRIPTION).toBe('subscription');
+    expect(CACHE_KEYS.RATE_LIMIT).toBe('ratelimit');
+    expect(CACHE_KEYS.DASHBOARD).toBe('dashboard');
+  });
+});
 
-    it('should reject incomplete PageSpeed data', () => {
-      const incomplete = { lcp: 2500, fcp: 1800 };
-      expect(isValidPageSpeedData(incomplete)).toBe(false);
-    });
+describe('CACHE_TTL', () => {
+  it('should have correct TTL values', () => {
+    expect(CACHE_TTL.PAGESPEED).toBe(86400);       // 24h
+    expect(CACHE_TTL.SCORE).toBe(0);                // never expires
+    expect(CACHE_TTL.SUBSCRIPTION).toBe(3600);      // 1h
+    expect(CACHE_TTL.RATE_LIMIT).toBe(60);          // 1 min
+    expect(CACHE_TTL.DASHBOARD).toBe(300);           // 5 min
+    expect(CACHE_TTL.SHORT).toBe(60);
+    expect(CACHE_TTL.MEDIUM).toBe(900);
+    expect(CACHE_TTL.LONG).toBe(3600);
+  });
+});
 
-    it('should reject null data', () => {
-      expect(isValidPageSpeedData(null)).toBe(false);
-    });
+// ============================================
+// cacheGet TESTS
+// ============================================
 
-    it('should reject invalid strategy', () => {
-      const data = {
-        lcp: 2500,
-        fcp: 1800,
-        cls: 0.1,
-        tbt: 200,
-        strategy: 'tablet',
-      };
-      expect(isValidPageSpeedData(data)).toBe(false);
-    });
+describe('cacheGet', () => {
+  it('should return cached value on hit', async () => {
+    mockRedis.get.mockResolvedValue({ score: 85 });
+
+    const result = await cacheGet<{ score: number }>('score:123');
+    expect(result).toEqual({ score: 85 });
+    expect(mockRedis.get).toHaveBeenCalledWith('score:123');
   });
 
-  describe('Cache Expiration Logic', () => {
-    function shouldRefreshCache(
-      cachedAt: Date,
-      ttlSeconds: number
-    ): boolean {
-      if (ttlSeconds === 0) return false; // Never expires
-      const now = new Date();
-      const expiresAt = new Date(cachedAt.getTime() + ttlSeconds * 1000);
-      return now >= expiresAt;
-    }
+  it('should return null on cache miss', async () => {
+    mockRedis.get.mockResolvedValue(null);
 
-    it('should not refresh when TTL is 0 (never expires)', () => {
-      const cachedAt = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000); // 1 year ago
-      expect(shouldRefreshCache(cachedAt, 0)).toBe(false);
-    });
-
-    it('should not refresh when within TTL', () => {
-      const cachedAt = new Date(Date.now() - 30 * 1000); // 30 seconds ago
-      expect(shouldRefreshCache(cachedAt, 60)).toBe(false);
-    });
-
-    it('should refresh when TTL expired', () => {
-      const cachedAt = new Date(Date.now() - 120 * 1000); // 2 minutes ago
-      expect(shouldRefreshCache(cachedAt, 60)).toBe(true);
-    });
-
-    it('should refresh when exactly at TTL', () => {
-      const cachedAt = new Date(Date.now() - 60 * 1000); // Exactly 60 seconds ago
-      expect(shouldRefreshCache(cachedAt, 60)).toBe(true);
-    });
+    const result = await cacheGet('nonexistent:key');
+    expect(result).toBeNull();
   });
 
-  describe('Rate Limit Key Generation', () => {
-    function getRateLimitKey(identifier: string): string {
-      const now = new Date();
-      const minute = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
-      return `ratelimit:${identifier}:${minute}`;
-    }
+  it('should return null when Redis is unavailable (throws)', async () => {
+    mockRedis.get.mockRejectedValue(new Error('Redis connection refused'));
 
-    it('should generate unique key per minute', () => {
-      const key = getRateLimitKey('test-shop');
-      expect(key).toMatch(/^ratelimit:test-shop:\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$/);
-    });
+    const result = await cacheGet('any:key');
+    expect(result).toBeNull();
+  });
+});
 
-    it('should include identifier in key', () => {
-      const key = getRateLimitKey('my-shop.myshopify.com');
-      expect(key).toContain('my-shop.myshopify.com');
-    });
+// ============================================
+// cacheSet TESTS
+// ============================================
+
+describe('cacheSet', () => {
+  it('should set with TTL when ttlSeconds > 0', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+
+    const result = await cacheSet('key:1', { data: 'value' }, 300);
+    expect(result).toBe(true);
+    expect(mockRedis.set).toHaveBeenCalledWith('key:1', { data: 'value' }, { ex: 300 });
   });
 
-  describe('Cache Invalidation Patterns', () => {
-    function getInvalidationPatterns(shopDomain: string): string[] {
-      return [
-        `pagespeed:${shopDomain}:*`,
-        `subscription:${shopDomain}`,
-        `dashboard:${shopDomain}:*`,
-      ];
-    }
+  it('should set without TTL when ttlSeconds is 0', async () => {
+    mockRedis.set.mockResolvedValue('OK');
 
-    it('should generate correct invalidation patterns', () => {
-      const patterns = getInvalidationPatterns('test.myshopify.com');
-      expect(patterns).toHaveLength(3);
-      expect(patterns[0]).toBe('pagespeed:test.myshopify.com:*');
-      expect(patterns[1]).toBe('subscription:test.myshopify.com');
-      expect(patterns[2]).toBe('dashboard:test.myshopify.com:*');
-    });
+    const result = await cacheSet('key:2', 'permanent', 0);
+    expect(result).toBe(true);
+    expect(mockRedis.set).toHaveBeenCalledWith('key:2', 'permanent');
+  });
 
-    it('should use wildcard for multi-key invalidation', () => {
-      const patterns = getInvalidationPatterns('shop');
-      expect(patterns[0]).toContain('*');
-    });
+  it('should use default TTL (MEDIUM) when not specified', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+
+    await cacheSet('key:3', 'data');
+    expect(mockRedis.set).toHaveBeenCalledWith('key:3', 'data', { ex: CACHE_TTL.MEDIUM });
+  });
+
+  it('should return false when Redis is unavailable', async () => {
+    mockRedis.set.mockRejectedValue(new Error('Redis down'));
+
+    const result = await cacheSet('key:fail', 'data', 60);
+    expect(result).toBe(false);
+  });
+});
+
+// ============================================
+// cacheDelete TESTS
+// ============================================
+
+describe('cacheDelete', () => {
+  it('should delete a key and return true', async () => {
+    mockRedis.del.mockResolvedValue(1);
+
+    const result = await cacheDelete('key:to-delete');
+    expect(result).toBe(true);
+    expect(mockRedis.del).toHaveBeenCalledWith('key:to-delete');
+  });
+
+  it('should return false when Redis is unavailable', async () => {
+    mockRedis.del.mockRejectedValue(new Error('Redis down'));
+
+    const result = await cacheDelete('key:fail');
+    expect(result).toBe(false);
+  });
+});
+
+// ============================================
+// cacheDeletePattern TESTS
+// ============================================
+
+describe('cacheDeletePattern', () => {
+  it('should use SCAN (not KEYS) to find matching keys', async () => {
+    mockRedis.scan.mockResolvedValue([0, ['key:1', 'key:2']]);
+    mockRedis.del.mockResolvedValue(2);
+
+    const result = await cacheDeletePattern('key:*');
+    expect(result).toBe(true);
+    expect(mockRedis.scan).toHaveBeenCalled();
+    expect(mockRedis.keys).not.toHaveBeenCalled();
+  });
+
+  it('should delete found keys', async () => {
+    mockRedis.scan.mockResolvedValue([0, ['pagespeed:shop:mobile', 'pagespeed:shop:desktop']]);
+    mockRedis.del.mockResolvedValue(2);
+
+    await cacheDeletePattern('pagespeed:shop:*');
+    expect(mockRedis.del).toHaveBeenCalledWith('pagespeed:shop:mobile', 'pagespeed:shop:desktop');
+  });
+
+  it('should handle paginated SCAN results', async () => {
+    // First scan returns cursor 42 with some keys
+    mockRedis.scan
+      .mockResolvedValueOnce([42, ['key:1', 'key:2']])
+      .mockResolvedValueOnce([0, ['key:3']]);
+    mockRedis.del.mockResolvedValue(3);
+
+    const result = await cacheDeletePattern('key:*');
+    expect(result).toBe(true);
+    expect(mockRedis.scan).toHaveBeenCalledTimes(2);
+    // Should delete all 3 keys
+    expect(mockRedis.del).toHaveBeenCalledWith('key:1', 'key:2', 'key:3');
+  });
+
+  it('should delete in batches of 100', async () => {
+    // Return 150 keys
+    const keys = Array.from({ length: 150 }, (_, i) => `key:${i}`);
+    mockRedis.scan.mockResolvedValue([0, keys]);
+    mockRedis.del.mockResolvedValue(100);
+
+    await cacheDeletePattern('key:*');
+    // Should be called twice: first 100, then remaining 50
+    expect(mockRedis.del).toHaveBeenCalledTimes(2);
+    expect(mockRedis.del).toHaveBeenNthCalledWith(1, ...keys.slice(0, 100));
+    expect(mockRedis.del).toHaveBeenNthCalledWith(2, ...keys.slice(100, 150));
+  });
+
+  it('should not call del if no keys found', async () => {
+    mockRedis.scan.mockResolvedValue([0, []]);
+
+    const result = await cacheDeletePattern('nonexistent:*');
+    expect(result).toBe(true);
+    expect(mockRedis.del).not.toHaveBeenCalled();
+  });
+
+  it('should return false when Redis is unavailable', async () => {
+    mockRedis.scan.mockRejectedValue(new Error('Redis down'));
+
+    const result = await cacheDeletePattern('any:*');
+    expect(result).toBe(false);
+  });
+});
+
+// ============================================
+// cacheIncrement TESTS
+// ============================================
+
+describe('cacheIncrement', () => {
+  it('should use pipeline for atomic INCR+EXPIRE', async () => {
+    mockPipelineExec.mockResolvedValue([5, true]);
+
+    const result = await cacheIncrement('ratelimit:user:1', 60);
+    expect(result).toBe(5);
+    expect(mockRedis.pipeline).toHaveBeenCalled();
+    expect(mockPipeline.incr).toHaveBeenCalledWith('ratelimit:user:1');
+    expect(mockPipeline.expire).toHaveBeenCalledWith('ratelimit:user:1', 60);
+    expect(mockPipelineExec).toHaveBeenCalled();
+  });
+
+  it('should not set expire when ttlSeconds is 0', async () => {
+    mockPipelineExec.mockResolvedValue([3]);
+
+    await cacheIncrement('counter:permanent', 0);
+    expect(mockPipeline.incr).toHaveBeenCalledWith('counter:permanent');
+    expect(mockPipeline.expire).not.toHaveBeenCalled();
+  });
+
+  it('should use default TTL (RATE_LIMIT = 60s)', async () => {
+    mockPipelineExec.mockResolvedValue([1, true]);
+
+    await cacheIncrement('ratelimit:default');
+    expect(mockPipeline.expire).toHaveBeenCalledWith('ratelimit:default', CACHE_TTL.RATE_LIMIT);
+  });
+
+  it('should return null when Redis is unavailable', async () => {
+    mockPipelineExec.mockRejectedValue(new Error('Redis down'));
+
+    const result = await cacheIncrement('any:key');
+    expect(result).toBeNull();
+  });
+
+  it('should return null when pipeline returns empty', async () => {
+    mockPipelineExec.mockResolvedValue(null);
+
+    const result = await cacheIncrement('any:key');
+    expect(result).toBeNull();
+  });
+});
+
+// ============================================
+// cacheExists TESTS
+// ============================================
+
+describe('cacheExists', () => {
+  it('should return true when key exists', async () => {
+    mockRedis.exists.mockResolvedValue(1);
+
+    const result = await cacheExists('existing:key');
+    expect(result).toBe(true);
+  });
+
+  it('should return false when key does not exist', async () => {
+    mockRedis.exists.mockResolvedValue(0);
+
+    const result = await cacheExists('missing:key');
+    expect(result).toBe(false);
+  });
+
+  it('should return false when Redis is unavailable', async () => {
+    mockRedis.exists.mockRejectedValue(new Error('Redis down'));
+
+    const result = await cacheExists('any:key');
+    expect(result).toBe(false);
+  });
+});
+
+// ============================================
+// cacheTTL TESTS
+// ============================================
+
+describe('cacheTTL', () => {
+  it('should return TTL for a key', async () => {
+    mockRedis.ttl.mockResolvedValue(300);
+
+    const result = await cacheTTL('some:key');
+    expect(result).toBe(300);
+  });
+
+  it('should return null when Redis is unavailable', async () => {
+    mockRedis.ttl.mockRejectedValue(new Error('Redis down'));
+
+    const result = await cacheTTL('any:key');
+    expect(result).toBeNull();
+  });
+});
+
+// ============================================
+// cacheThrough TESTS
+// ============================================
+
+describe('cacheThrough', () => {
+  it('should return cached value if hit', async () => {
+    mockRedis.get.mockResolvedValue({ cached: true });
+
+    const computeFn = jest.fn().mockResolvedValue({ computed: true });
+    const result = await cacheThrough('key:hit', 300, computeFn);
+
+    expect(result).toEqual({ cached: true });
+    expect(computeFn).not.toHaveBeenCalled();
+  });
+
+  it('should compute and cache on miss', async () => {
+    mockRedis.get.mockResolvedValue(null);
+    mockRedis.set.mockResolvedValue('OK');
+
+    const computeFn = jest.fn().mockResolvedValue({ computed: true });
+    const result = await cacheThrough('key:miss', 300, computeFn);
+
+    expect(result).toEqual({ computed: true });
+    expect(computeFn).toHaveBeenCalled();
+    // cacheSet is fire-and-forget, but set should be called
+    // Allow some time for the async fire-and-forget
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(mockRedis.set).toHaveBeenCalledWith('key:miss', { computed: true }, { ex: 300 });
+  });
+
+  it('should still return computed value even if caching fails', async () => {
+    mockRedis.get.mockResolvedValue(null);
+    mockRedis.set.mockRejectedValue(new Error('Redis down'));
+
+    const computeFn = jest.fn().mockResolvedValue({ result: 42 });
+    const result = await cacheThrough('key:fail', 300, computeFn);
+
+    expect(result).toEqual({ result: 42 });
+  });
+
+  it('should still compute when Redis get fails (graceful degradation)', async () => {
+    mockRedis.get.mockRejectedValue(new Error('Redis down'));
+    mockRedis.set.mockResolvedValue('OK');
+
+    const computeFn = jest.fn().mockResolvedValue({ fresh: true });
+    const result = await cacheThrough('key:redis-down', 300, computeFn);
+
+    // cacheGet returns null on error, so computeFn runs
+    expect(result).toEqual({ fresh: true });
+    expect(computeFn).toHaveBeenCalled();
+  });
+});
+
+// ============================================
+// cacheHealthCheck TESTS
+// ============================================
+
+describe('cacheHealthCheck', () => {
+  it('should return true on ping success', async () => {
+    mockRedis.ping.mockResolvedValue('PONG');
+
+    const result = await cacheHealthCheck();
+    expect(result).toBe(true);
+    expect(mockRedis.ping).toHaveBeenCalled();
+  });
+
+  it('should return false on ping failure', async () => {
+    mockRedis.ping.mockRejectedValue(new Error('Connection refused'));
+
+    const result = await cacheHealthCheck();
+    expect(result).toBe(false);
+  });
+});
+
+// ============================================
+// SPECIALIZED FUNCTIONS TESTS
+// ============================================
+
+describe('cachePageSpeed / getCachedPageSpeed', () => {
+  it('should cache PageSpeed data with correct key and TTL', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+
+    await cachePageSpeed('shop.myshopify.com', 'mobile', { lcp: 2500 });
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      'pagespeed:shop.myshopify.com:mobile',
+      { lcp: 2500 },
+      { ex: CACHE_TTL.PAGESPEED }
+    );
+  });
+
+  it('should retrieve cached PageSpeed data', async () => {
+    mockRedis.get.mockResolvedValue({ lcp: 2500 });
+
+    const result = await getCachedPageSpeed('shop.myshopify.com', 'mobile');
+    expect(result).toEqual({ lcp: 2500 });
+    expect(mockRedis.get).toHaveBeenCalledWith('pagespeed:shop.myshopify.com:mobile');
+  });
+});
+
+describe('cacheScore / getCachedScore', () => {
+  it('should cache score with TTL=0 (immutable, never expires)', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+
+    await cacheScore(42, { overall: 85 });
+    // SCORE TTL is 0, so set should be called without ex
+    expect(mockRedis.set).toHaveBeenCalledWith('score:42', { overall: 85 });
+  });
+
+  it('should retrieve cached score', async () => {
+    mockRedis.get.mockResolvedValue({ overall: 85 });
+
+    const result = await getCachedScore(42);
+    expect(result).toEqual({ overall: 85 });
+    expect(mockRedis.get).toHaveBeenCalledWith('score:42');
+  });
+});
+
+describe('cacheSubscription / getCachedSubscription', () => {
+  it('should cache subscription with correct TTL', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+
+    await cacheSubscription('shop.myshopify.com', { plan: 'pro' });
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      'subscription:shop.myshopify.com',
+      { plan: 'pro' },
+      { ex: CACHE_TTL.SUBSCRIPTION }
+    );
+  });
+
+  it('should retrieve cached subscription', async () => {
+    mockRedis.get.mockResolvedValue({ plan: 'pro' });
+
+    const result = await getCachedSubscription('shop.myshopify.com');
+    expect(result).toEqual({ plan: 'pro' });
+  });
+});
+
+describe('invalidateSubscriptionCache', () => {
+  it('should delete subscription cache key', async () => {
+    mockRedis.del.mockResolvedValue(1);
+
+    const result = await invalidateSubscriptionCache('shop.myshopify.com');
+    expect(result).toBe(true);
+    expect(mockRedis.del).toHaveBeenCalledWith('subscription:shop.myshopify.com');
+  });
+});
+
+// ============================================
+// invalidateShopCaches TESTS
+// ============================================
+
+describe('invalidateShopCaches', () => {
+  it('should delete all patterns for a shop', async () => {
+    mockRedis.scan.mockResolvedValue([0, []]);
+
+    const result = await invalidateShopCaches('shop.myshopify.com');
+    expect(result).toBe(true);
+
+    // Should attempt to delete 3 patterns
+    expect(mockRedis.scan).toHaveBeenCalledTimes(3);
+  });
+
+  it('should delete pagespeed, subscription, and dashboard patterns', async () => {
+    mockRedis.scan.mockResolvedValue([0, ['some-key']]);
+    mockRedis.del.mockResolvedValue(1);
+
+    await invalidateShopCaches('test.myshopify.com');
+
+    // Check the scan calls include the right patterns
+    const scanCalls = mockRedis.scan.mock.calls;
+    const patterns = scanCalls.map((call: any[]) => call[1]?.match);
+    expect(patterns).toContain('pagespeed:test.myshopify.com:*');
+    expect(patterns).toContain('subscription:test.myshopify.com');
+    expect(patterns).toContain('dashboard:test.myshopify.com:*');
+  });
+
+  it('should return false if any pattern deletion fails', async () => {
+    mockRedis.scan
+      .mockResolvedValueOnce([0, []])
+      .mockRejectedValueOnce(new Error('Redis fail'))
+      .mockResolvedValueOnce([0, []]);
+
+    const result = await invalidateShopCaches('shop.myshopify.com');
+    expect(result).toBe(false);
+  });
+});
+
+// ============================================
+// GRACEFUL DEGRADATION TESTS
+// ============================================
+
+describe('graceful degradation (all operations)', () => {
+  it('cacheGet returns null on error', async () => {
+    mockRedis.get.mockRejectedValue(new Error('fail'));
+    expect(await cacheGet('key')).toBeNull();
+  });
+
+  it('cacheSet returns false on error', async () => {
+    mockRedis.set.mockRejectedValue(new Error('fail'));
+    expect(await cacheSet('key', 'val')).toBe(false);
+  });
+
+  it('cacheDelete returns false on error', async () => {
+    mockRedis.del.mockRejectedValue(new Error('fail'));
+    expect(await cacheDelete('key')).toBe(false);
+  });
+
+  it('cacheDeletePattern returns false on error', async () => {
+    mockRedis.scan.mockRejectedValue(new Error('fail'));
+    expect(await cacheDeletePattern('key:*')).toBe(false);
+  });
+
+  it('cacheIncrement returns null on error', async () => {
+    mockPipelineExec.mockRejectedValue(new Error('fail'));
+    expect(await cacheIncrement('key')).toBeNull();
+  });
+
+  it('cacheExists returns false on error', async () => {
+    mockRedis.exists.mockRejectedValue(new Error('fail'));
+    expect(await cacheExists('key')).toBe(false);
+  });
+
+  it('cacheTTL returns null on error', async () => {
+    mockRedis.ttl.mockRejectedValue(new Error('fail'));
+    expect(await cacheTTL('key')).toBeNull();
+  });
+
+  it('cacheHealthCheck returns false on error', async () => {
+    mockRedis.ping.mockRejectedValue(new Error('fail'));
+    expect(await cacheHealthCheck()).toBe(false);
   });
 });

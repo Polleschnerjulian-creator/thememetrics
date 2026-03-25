@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
  * GET /api/health?detailed=true - Returns detailed metrics (requires secret)
  */
 
+import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHealthStatus, getAggregatedMetrics } from '@/lib/monitoring';
 import { cacheHealthCheck } from '@/lib/cache';
@@ -15,8 +16,21 @@ import { sql } from 'drizzle-orm';
 
 // Verify admin secret for detailed metrics
 function verifySecret(request: NextRequest): boolean {
-  const secret = request.nextUrl.searchParams.get('secret');
-  return secret === process.env.HEALTH_CHECK_SECRET;
+  const secret = process.env.HEALTH_CHECK_SECRET;
+  if (!secret) return false;
+
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return false;
+
+  const provided = authHeader.substring(7);
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(provided, 'utf8'),
+      Buffer.from(secret, 'utf8')
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function GET(request: NextRequest) {

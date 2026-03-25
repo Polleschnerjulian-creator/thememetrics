@@ -1,28 +1,17 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { db, schema } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
-import { isValidShopDomain } from '@/lib/security';
+import { authenticateRequest, authErrorResponse } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    const shopSession = cookieStore.get('shop_session')?.value;
-
-    if (!shopSession || !isValidShopDomain(shopSession)) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success) {
+      return authErrorResponse(authResult);
     }
-
-    // Get store
-    const store = await db.query.stores.findFirst({
-      where: eq(schema.stores.shopDomain, shopSession),
-    });
-
-    if (!store) {
-      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
-    }
+    const store = authResult.store;
 
     // Check if agency plan
     const subscription = await db.query.subscriptions.findFirst({
@@ -75,12 +64,11 @@ export async function POST(request: NextRequest) {
     // Analyze each workspace sequentially
     for (const workspace of agencyWorkspaces) {
       try {
-        // Call the analyze API for each workspace shop
         const analyzeResponse = await fetch(`${appUrl}/api/themes/analyze`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Cookie': `shop_session=${workspace.shopDomain}`,
+            'Authorization': request.headers.get('Authorization') || '',
           },
           body: JSON.stringify({ shop: workspace.shopDomain }),
         });
@@ -139,20 +127,15 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET endpoint to check batch analysis status (for future async implementation)
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const batchId = searchParams.get('batchId');
-
-  if (!batchId) {
-    return NextResponse.json({ error: 'Batch ID required' }, { status: 400 });
+  const authResult = await authenticateRequest(request);
+  if (!authResult.success) {
+    return authErrorResponse(authResult);
   }
 
-  // For now, return not found - async implementation would track batch jobs
   return NextResponse.json({
-    error: 'Batch not found',
-    message: 'Batch-Analysen werden synchron ausgeführt. Verwende POST um eine neue Batch-Analyse zu starten.'
-  }, { status: 404 });
+    message: 'Batch-Analysen werden synchron via POST ausgeführt.',
+  });
 }
 
 export { OPTIONS } from '@/lib/auth';

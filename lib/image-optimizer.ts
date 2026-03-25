@@ -386,7 +386,7 @@ function checkShopifyImageUrl(code: string, lines: string[], section: string): I
   const oldFilterMatches = code.match(oldFilterRegex);
   if (oldFilterMatches && oldFilterMatches.length > 0) {
     // Find first occurrence for line number
-    const firstMatch = oldFilterRegex.exec(code);
+    const firstMatch = /\|\s*img_url\s*:/i.exec(code);
     if (firstMatch) {
       const lineNumber = getLineNumber(code, firstMatch.index, lines);
       

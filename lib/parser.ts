@@ -192,9 +192,9 @@ export function analyzeSection(filename: string, content: string): SectionAnalys
   const inlineStyles = (content.match(/style=["'][^"']+["']/g) || []).length;
   
   // Check for responsive images
-  const hasResponsiveImages = content.includes('srcset') || 
-    content.includes('image_url') && content.includes('widths:') ||
-    content.includes('sizes:');
+  const hasResponsiveImages = content.includes('srcset') ||
+    (content.includes('image_url') && content.includes('widths:')) ||
+    (content.includes('image_url') && content.includes('sizes:'));
   
   // Check for preload hints
   const hasPreload = content.includes('rel="preload"') || 

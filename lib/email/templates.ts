@@ -345,7 +345,7 @@ export function leadNurtureDay1(data: LeadNurtureEmailData): string {
       Mit ThemeMetrics siehst du <strong>genau welche Sections</strong> diese Probleme haben – und wie du sie fixst.
     </p>
     
-    ${button('Kostenlos testen →', 'https://thememetrics.de/api/auth/install?shop=' + (data.shopUrl || ''))}
+    ${button('Kostenlos testen →', 'https://thememetrics.de/api/auth/install?shop=' + encodeURIComponent(data.shopUrl || ''))}
   `);
 }
 
@@ -374,7 +374,7 @@ export function leadNurtureDay3(data: LeadNurtureEmailData): string {
       <strong>Das Ergebnis:</strong> 23% höhere Conversion Rate im ersten Monat.
     </p>
     
-    ${button('Deine Sections analysieren →', 'https://thememetrics.de/api/auth/install?shop=' + (data.shopUrl || ''))}
+    ${button('Deine Sections analysieren →', 'https://thememetrics.de/api/auth/install?shop=' + encodeURIComponent(data.shopUrl || ''))}
   `);
 }
 
@@ -415,6 +415,6 @@ export function leadNurtureDay7(data: LeadNurtureEmailData): string {
       Statt €29/Monat nur <strong style="color: #10b981;">€23/Monat</strong> mit deinem Code.
     </p>
     
-    ${button('Code einlösen →', 'https://thememetrics.de/api/auth/install?shop=' + (data.shopUrl || '') + '&promo=SPEED20')}
+    ${button('Code einlösen →', 'https://thememetrics.de/api/auth/install?shop=' + encodeURIComponent(data.shopUrl || '') + '&promo=SPEED20')}
   `);
 }

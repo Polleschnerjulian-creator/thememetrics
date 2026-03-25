@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         storeId = existingStore.id;
       } catch (dbUpdateError) {
         captureError(dbUpdateError as Error, { tags: { route: 'auth/callback', action: 'updateStore', shop } });
-        return NextResponse.redirect(`${appUrl}/?error=db_update_failed`);
+        return NextResponse.redirect(`${appUrl}/?error=install_failed`);
       }
     } else {
       try {
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
         captureMessage(`New store installed: ${shop}`, { tags: { shop, storeId: String(storeId) } });
       } catch (dbInsertError) {
         captureError(dbInsertError as Error, { tags: { route: 'auth/callback', action: 'createStore', shop } });
-        return NextResponse.redirect(`${appUrl}/?error=db_insert_failed`);
+        return NextResponse.redirect(`${appUrl}/?error=install_failed`);
       }
     }
 
@@ -146,8 +146,12 @@ export async function GET(request: NextRequest) {
     cookieStore.delete('shopify_host');
 
     // Sign the session cookie with HMAC to prevent tampering
-    const crypto = require('crypto');
-    const sessionSecret = process.env.SESSION_SECRET || '';
+    const sessionSecret = process.env.SESSION_SECRET;
+    if (!sessionSecret) {
+      console.error('CRITICAL: SESSION_SECRET not configured');
+      return NextResponse.redirect(`${appUrl}/?error=install_failed`);
+    }
+    const crypto = await import('crypto');
     const signature = crypto.createHmac('sha256', sessionSecret).update(shop).digest('hex');
     const signedValue = `${shop}.${signature}`;
 

@@ -8,6 +8,7 @@
 import { db, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { PLANS, PlanId } from '@/lib/billing';
+import { captureError } from '@/lib/monitoring';
 
 export interface DowngradeCheck {
   canDowngrade: boolean;
@@ -39,57 +40,52 @@ export async function checkDowngradeImpact(
   const fromFeatures = PLANS[fromPlan].features;
   const toFeatures = PLANS[toPlan].features;
 
-  // Check workspaces limit (Agency feature)
-  if (fromFeatures.workspaces > toFeatures.workspaces) {
-    const agency = await db.query.agencies.findFirst({
-      where: eq(schema.agencies.ownerStoreId, storeId),
+  // Get agency once for both workspace and team member checks
+  const needsAgencyCheck = fromFeatures.workspaces > toFeatures.workspaces ||
+                           fromFeatures.teamMembers > toFeatures.teamMembers;
+  const agency = needsAgencyCheck
+    ? await db.query.agencies.findFirst({ where: eq(schema.agencies.ownerStoreId, storeId) })
+    : null;
+
+  // Check workspaces limit
+  if (fromFeatures.workspaces > toFeatures.workspaces && agency) {
+    const workspaces = await db.query.workspaces.findMany({
+      where: eq(schema.workspaces.agencyId, agency.id),
     });
 
-    if (agency) {
-      const workspaces = await db.query.workspaces.findMany({
-        where: eq(schema.workspaces.agencyId, agency.id),
+    const activeWorkspaces = workspaces.filter(w => w.isActive);
+
+    if (activeWorkspaces.length > toFeatures.workspaces) {
+      const toDeactivate = activeWorkspaces.length - toFeatures.workspaces;
+      result.warnings.push(
+        `Du hast ${activeWorkspaces.length} aktive Workspaces, aber der ${PLANS[toPlan].name} Plan erlaubt nur ${toFeatures.workspaces}.`
+      );
+      result.actions.push({
+        type: 'deactivate_workspaces',
+        count: toDeactivate,
+        description: `${toDeactivate} Workspace(s) werden deaktiviert`,
       });
-
-      const activeWorkspaces = workspaces.filter(w => w.isActive);
-
-      if (activeWorkspaces.length > toFeatures.workspaces) {
-        const toDeactivate = activeWorkspaces.length - toFeatures.workspaces;
-        result.warnings.push(
-          `Du hast ${activeWorkspaces.length} aktive Workspaces, aber der ${PLANS[toPlan].name} Plan erlaubt nur ${toFeatures.workspaces}.`
-        );
-        result.actions.push({
-          type: 'deactivate_workspaces',
-          count: toDeactivate,
-          description: `${toDeactivate} Workspace(s) werden deaktiviert`,
-        });
-      }
     }
   }
 
-  // Check team members limit (Agency feature)
-  if (fromFeatures.teamMembers > toFeatures.teamMembers) {
-    const agency = await db.query.agencies.findFirst({
-      where: eq(schema.agencies.ownerStoreId, storeId),
+  // Check team members limit
+  if (fromFeatures.teamMembers > toFeatures.teamMembers && agency) {
+    const teamMembers = await db.query.teamMembers.findMany({
+      where: eq(schema.teamMembers.agencyId, agency.id),
     });
 
-    if (agency) {
-      const teamMembers = await db.query.teamMembers.findMany({
-        where: eq(schema.teamMembers.agencyId, agency.id),
+    const activeMembers = teamMembers.filter(m => m.inviteStatus === 'accepted');
+
+    if (activeMembers.length > toFeatures.teamMembers) {
+      const toDeactivate = activeMembers.length - toFeatures.teamMembers;
+      result.warnings.push(
+        `Du hast ${activeMembers.length} Team-Mitglieder, aber der ${PLANS[toPlan].name} Plan erlaubt nur ${toFeatures.teamMembers}.`
+      );
+      result.actions.push({
+        type: 'deactivate_team_members',
+        count: toDeactivate,
+        description: `${toDeactivate} Team-Mitglied(er) verlieren den Zugang`,
       });
-
-      const activeMembers = teamMembers.filter(m => m.inviteStatus === 'accepted');
-
-      if (activeMembers.length > toFeatures.teamMembers) {
-        const toDeactivate = activeMembers.length - toFeatures.teamMembers;
-        result.warnings.push(
-          `Du hast ${activeMembers.length} Team-Mitglieder, aber der ${PLANS[toPlan].name} Plan erlaubt nur ${toFeatures.teamMembers}.`
-        );
-        result.actions.push({
-          type: 'deactivate_team_members',
-          count: toDeactivate,
-          description: `${toDeactivate} Team-Mitglied(er) verlieren den Zugang`,
-        });
-      }
     }
   }
 
@@ -209,6 +205,7 @@ export async function executeDowngrade(
 
     return { success: true, actionsExecuted };
   } catch (error) {
+    captureError(error as Error, { context: 'executeDowngrade', extra: { storeId: String(storeId), toPlan } });
     return { success: false, actionsExecuted };
   }
 }

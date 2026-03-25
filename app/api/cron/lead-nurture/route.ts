@@ -31,9 +31,7 @@ export async function GET(request: NextRequest) {
   // Verify cron secret with timing-safe comparison
   const authHeader = request.headers.get('authorization');
   if (!verifyCronSecret(authHeader)) {
-    if (process.env.NODE_ENV === 'production') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {

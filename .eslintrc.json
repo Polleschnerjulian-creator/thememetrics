@@ -2,7 +2,7 @@
   "extends": ["next/core-web-vitals"],
   "rules": {
     "no-console": ["warn", { "allow": ["warn", "error"] }],
-    "no-unused-vars": "off",
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "warn",
     "react/no-unescaped-entities": "off",

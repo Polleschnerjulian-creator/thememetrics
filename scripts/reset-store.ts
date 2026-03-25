@@ -1,6 +1,7 @@
 import { db } from '../lib/db';
-import { stores, subscriptions, themes, themeAnalyses, sections, recommendations, performanceSnapshots, sectionAnalyses } from '../lib/db/schema';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { stores, subscriptions, themes, themeAnalyses, sections, recommendations, performanceSnapshots, sectionAnalyses, imageAnalyses, usageTracking, promoCodeUses, emailSubscriptions, emailLeads } from '../lib/db/schema';
+import { eq, inArray, like } from 'drizzle-orm';
+import * as schema from '../lib/db/schema';
 
 async function resetStore(shopDomain: string) {
   console.log(`🗑️  Resetting store: ${shopDomain}\n`);
@@ -70,29 +71,29 @@ async function resetStore(shopDomain: string) {
       );
     }
 
-    // 4. Try to delete from optional tables using raw SQL (they may not exist)
-    const optionalTables = [
-      { name: 'image_analyses', column: 'store_id' },
-      { name: 'usage_tracking', column: 'store_id' },
-      { name: 'promo_code_uses', column: 'store_id' },
-      { name: 'email_subscriptions', column: 'store_id' },
-      { name: 'email_leads', column: 'shop_url' }, // Different column
-    ];
+    // 4. Delete from optional tables using type-safe Drizzle queries
+    // For email_leads (uses LIKE on shopUrl):
+    try {
+      await db.delete(emailLeads).where(like(emailLeads.shopUrl, `%${shopDomain}%`));
+      console.log('   ✅ email_leads deleted');
+    } catch (error: any) {
+      console.log(`   ⚠️  email_leads - ${error.message}`);
+    }
 
-    for (const table of optionalTables) {
+    // For other tables, use eq with store.id:
+    const tablesToClean = [
+      { table: imageAnalyses, name: 'image_analyses' },
+      { table: usageTracking, name: 'usage_tracking' },
+      { table: promoCodeUses, name: 'promo_code_uses' },
+      { table: emailSubscriptions, name: 'email_subscriptions' },
+    ] as const;
+
+    for (const { table, name } of tablesToClean) {
       try {
-        if (table.name === 'email_leads') {
-          await db.execute(sql.raw(`DELETE FROM ${table.name} WHERE ${table.column} LIKE '%${shopDomain}%'`));
-        } else {
-          await db.execute(sql.raw(`DELETE FROM ${table.name} WHERE ${table.column} = ${store.id}`));
-        }
-        console.log(`   ✅ ${table.name} deleted`);
+        await db.delete(table).where(eq(table.storeId, store.id));
+        console.log(`   ✅ ${name} deleted`);
       } catch (error: any) {
-        if (error.code === '42P01') {
-          console.log(`   ⏭️  ${table.name} - table doesn't exist, skipping`);
-        } else {
-          console.log(`   ⚠️  ${table.name} - ${error.message}`);
-        }
+        console.log(`   ⚠️  ${name} - ${error.message}`);
       }
     }
 

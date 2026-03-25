@@ -300,9 +300,13 @@ const THEME_RULES: Array<{
   {
     id: 'no-above-fold-optimization',
     condition: (sections) => {
-      const firstTwo = sections.slice(0, 2);
-      return firstTwo.some(s => !s.hasLazyLoading) === false && 
-             sections.slice(2).every(s => !s.hasLazyLoading);
+      const aboveFold = sections.slice(0, 2);
+      const belowFold = sections.slice(2);
+      // Fire when above-fold is correctly NOT lazy loaded,
+      // but below-fold sections ARE missing lazy loading
+      const aboveFoldCorrect = aboveFold.every(s => !s.hasLazyLoading);
+      const belowFoldMissing = belowFold.some(s => !s.hasLazyLoading);
+      return aboveFoldCorrect && belowFoldMissing && belowFold.length > 0;
     },
     rule: {
       type: 'performance',

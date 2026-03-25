@@ -272,11 +272,14 @@ export function getSecurityHeaders(): Record<string, string> {
  * Apply security headers to response
  */
 export function withSecurityHeaders(response: Response): Response {
-  const headers = getSecurityHeaders();
-  
-  for (const [key, value] of Object.entries(headers)) {
-    response.headers.set(key, value);
+  const newHeaders = new Headers(response.headers);
+  const secHeaders = getSecurityHeaders();
+  for (const [key, value] of Object.entries(secHeaders)) {
+    newHeaders.set(key, value);
   }
-  
-  return response;
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
 }

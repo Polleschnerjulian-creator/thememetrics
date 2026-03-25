@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { PLANS, PlanId } from '@/lib/billing';
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
 
 interface PlanFeatures {
   themeAnalysisPerMonth: number;
@@ -76,13 +77,14 @@ export function PlanProvider({ children, shop }: { children: ReactNode; shop: st
   const [usage, setUsage] = useState<Usage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { authenticatedFetch, isReady } = useAppBridge();
 
-  const fetchSubscription = async () => {
-    if (!shop) return;
-    
+  const fetchSubscription = useCallback(async () => {
+    if (!shop || !isReady) return;
+
     try {
       setLoading(true);
-      const response = await fetch(`/api/subscription?shop=${shop}`);
+      const response = await authenticatedFetch(`/api/subscription?shop=${shop}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch subscription');
@@ -102,11 +104,11 @@ export function PlanProvider({ children, shop }: { children: ReactNode; shop: st
     } finally {
       setLoading(false);
     }
-  };
+  }, [shop, authenticatedFetch, isReady]);
 
   useEffect(() => {
     fetchSubscription();
-  }, [shop]);
+  }, [fetchSubscription]);
 
   const canUseFeature = (feature: keyof PlanFeatures): boolean => {
     const value = features[feature];

@@ -9,6 +9,16 @@ export function middleware(request: NextRequest) {
   response.headers.set('X-XSS-Protection', '1; mode=block');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  response.headers.set(
+    'Content-Security-Policy',
+    "frame-ancestors https://*.myshopify.com https://admin.shopify.com; " +
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.shopify.com; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "connect-src 'self' https://*.myshopify.com https://admin.shopify.com https://*.google.com https://*.googleapis.com; " +
+    "img-src 'self' https://cdn.shopify.com data: blob:; " +
+    "font-src 'self' data:;"
+  );
 
   // CORS for API routes - dynamic origin validation
   if (request.nextUrl.pathname.startsWith('/api/')) {
@@ -23,9 +33,8 @@ export function middleware(request: NextRequest) {
 
     if (isAllowed) {
       response.headers.set('Access-Control-Allow-Origin', origin);
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
     }
-
-    response.headers.set('Access-Control-Allow-Credentials', 'true');
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     response.headers.set(
       'Access-Control-Allow-Headers',

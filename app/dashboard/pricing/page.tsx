@@ -115,6 +115,7 @@ export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const [currentPlan, setCurrentPlan] = useState<string>('free');
+  const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [usage, setUsage] = useState<any>(null);
   const [loadingPlan, setLoadingPlan] = useState(true);
   const { shop, isLoading: shopLoading } = useShop();
@@ -147,7 +148,7 @@ export default function PricingPage() {
     if (planId === 'free' || planId === currentPlan) return;
     
     if (!shop) {
-      alert('Shop nicht gefunden. Bitte lade die Seite neu.');
+      setStatusMessage({ type: 'error', text: 'Shop nicht gefunden. Bitte lade die Seite neu.' });
       return;
     }
     
@@ -167,7 +168,7 @@ export default function PricingPage() {
       const data = await response.json();
 
       if (data.error) {
-        alert(`Fehler: ${data.error}`);
+        setStatusMessage({ type: 'error', text: `Fehler: ${data.error}` });
         return;
       }
       
@@ -180,11 +181,11 @@ export default function PricingPage() {
           window.location.href = data.confirmationUrl;
         }
       } else if (data.success && data.plan === 'free') {
-        alert('Du bist jetzt auf dem Free Plan!');
-        window.location.reload();
+        setStatusMessage({ type: 'success', text: 'Du bist jetzt auf dem Free Plan!' });
+        setTimeout(() => window.location.reload(), 1500);
       }
     } catch (error) {
-      alert('Ein Fehler ist aufgetreten. Bitte versuche es erneut.');
+      setStatusMessage({ type: 'error', text: 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.' });
     } finally {
       setLoading(null);
     }
@@ -207,6 +208,16 @@ export default function PricingPage() {
 
   return (
     <div className="space-y-8">
+      {/* Status Message */}
+      {statusMessage && (
+        <div className={`p-4 rounded-lg ${statusMessage.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800' : 'bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-800'}`}>
+          <div className="flex items-center justify-between">
+            <span>{statusMessage.text}</span>
+            <button onClick={() => setStatusMessage(null)} className="ml-2 underline text-sm">Schließen</button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="text-center">
         <h1 className="text-3xl font-bold text-foreground">Wähle deinen Plan</h1>

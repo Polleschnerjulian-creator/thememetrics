@@ -1,4 +1,4 @@
-import { db } from '@/lib/db';
+import { db, schema } from '@/lib/db';
 import { emailSubscriptions, emailLogs, scheduledEmails, emailLeads, stores } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { sendEmail } from './resend';
@@ -148,9 +148,19 @@ export async function sendWelcomeEmail(storeId: number) {
     const html = welcomeEmail(data);
     const subject = `Willkommen bei ThemeMetrics, ${storeName}! 🎉`;
 
-    // Get or create email from store (we'd need to store email in stores table ideally)
-    // For now, we'll skip if no email - in production, get from Shopify API
-    const email = `${storeName}@example.com`; // Placeholder - replace with actual email
+    // Check if we have a real email subscription for this store
+    const existingSub = await db.query.emailSubscriptions.findFirst({
+      where: and(
+        eq(schema.emailSubscriptions.storeId, storeId),
+        eq(schema.emailSubscriptions.status, 'active')
+      ),
+    });
+
+    if (!existingSub || !existingSub.email || existingSub.email.includes('@example.com')) {
+      return { success: false, error: 'No valid email address for store' };
+    }
+
+    const email = existingSub.email;
 
     const result = await sendEmail({
       to: email,
