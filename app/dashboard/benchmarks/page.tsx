@@ -54,7 +54,7 @@ function BenchmarksContent() {
 
   useEffect(() => {
     const shopFromParams = searchParams.get('shop');
-    const detectedShop = shopFromParams || getShopFromUrl() || 'thememetrics-test.myshopify.com';
+    const detectedShop = shopFromParams || getShopFromUrl() || '';
     setShop(detectedShop);
   }, [searchParams]);
 

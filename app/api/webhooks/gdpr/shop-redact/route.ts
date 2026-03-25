@@ -182,10 +182,13 @@ export async function POST(request: NextRequest) {
 
       } catch (dbError) {
         captureError(dbError as Error, {
-          tags: { webhook: 'shop/redact' },
-          extra: { shop_domain: shopDomain }
+          context: 'GDPR shop redact - database deletion failed',
+          extra: { shop_domain: data.shop_domain },
         });
-        // Still return 200 - we've logged the request for manual follow-up
+        return NextResponse.json(
+          { error: 'Database deletion failed, will retry' },
+          { status: 500 }
+        );
       }
     }
 

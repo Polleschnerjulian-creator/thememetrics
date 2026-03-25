@@ -30,7 +30,7 @@ export const subscriptions = pgTable('subscriptions', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => [
-  index('idx_subscriptions_store').on(table.storeId),
+  uniqueIndex('idx_subscriptions_store_unique').on(table.storeId),
 ]);
 
 export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
@@ -205,7 +205,9 @@ export const promoCodeUses = pgTable('promo_code_uses', {
   promoCodeId: integer('promo_code_id').references(() => promoCodes.id).notNull(),
   storeId: integer('store_id').references(() => stores.id).notNull(),
   usedAt: timestamp('used_at').defaultNow(),
-});
+}, (table) => [
+  uniqueIndex('idx_promo_code_uses_unique').on(table.promoCodeId, table.storeId),
+]);
 
 // Image optimization analysis storage
 export const imageAnalyses = pgTable('image_analyses', {
@@ -225,7 +227,9 @@ export const imageAnalyses = pgTable('image_analyses', {
   lowCount: integer('low_count').default(0),
   report: json('report'), // Full report JSON
   analyzedAt: timestamp('analyzed_at').defaultNow(),
-});
+}, (table) => [
+  index('idx_image_analyses_store_date').on(table.storeId, table.analyzedAt),
+]);
 
 export const imageAnalysesRelations = relations(imageAnalyses, ({ one }) => ({
   store: one(stores, {
@@ -306,6 +310,7 @@ export const workspaces = pgTable('workspaces', {
 }, (table) => [
   index('idx_workspaces_agency').on(table.agencyId),
   index('idx_workspaces_store').on(table.storeId),
+  uniqueIndex('idx_workspaces_client_token').on(table.clientAccessToken),
 ]);
 
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
@@ -335,7 +340,9 @@ export const teamMembers = pgTable('team_members', {
   // Activity
   lastActiveAt: timestamp('last_active_at'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  uniqueIndex('idx_team_members_agency_email').on(table.agencyId, table.email),
+]);
 
 export const teamMembersRelations = relations(teamMembers, ({ one, many }) => ({
   agency: one(agencies, {
@@ -442,4 +449,6 @@ export const scheduledEmails = pgTable('scheduled_emails', {
   sent: boolean('sent').default(false),
   sentAt: timestamp('sent_at'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => [
+  index('idx_scheduled_emails_due').on(table.sent, table.scheduledFor),
+]);

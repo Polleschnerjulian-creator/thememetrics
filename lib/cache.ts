@@ -135,13 +135,23 @@ export async function cacheDeletePattern(pattern: string): Promise<boolean> {
   if (!redis) return false;
 
   try {
-    const keys = await redis.keys(pattern);
-    if (keys.length > 0) {
-      await redis.del(...keys);
+    let cursor = 0;
+    const allKeys: string[] = [];
+
+    do {
+      const result = await redis.scan(cursor, { match: pattern, count: 100 });
+      cursor = Number(result[0]);
+      allKeys.push(...result[1]);
+    } while (cursor !== 0);
+
+    if (allKeys.length > 0) {
+      for (let i = 0; i < allKeys.length; i += 100) {
+        const batch = allKeys.slice(i, i + 100);
+        await redis.del(...batch);
+      }
     }
     return true;
   } catch (error) {
-    // Cache errors are silent - graceful degradation
     return false;
   }
 }
@@ -174,14 +184,15 @@ export async function cacheIncrement(
   if (!redis) return null;
 
   try {
-    const count = await redis.incr(key);
-    // Set expiry on first increment
-    if (count === 1 && ttlSeconds > 0) {
-      await redis.expire(key, ttlSeconds);
+    // Use pipeline for atomic INCR + EXPIRE
+    const pipeline = redis.pipeline();
+    pipeline.incr(key);
+    if (ttlSeconds > 0) {
+      pipeline.expire(key, ttlSeconds);
     }
-    return count;
+    const results = await pipeline.exec();
+    return (results?.[0] as number) ?? null;
   } catch (error) {
-    // Cache errors are silent - graceful degradation
     return null;
   }
 }

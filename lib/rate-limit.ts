@@ -132,33 +132,47 @@ export async function checkDailyPerformanceLimit(
   allowed: boolean;
   used: number;
   limit: number;
+  resetAt: Date;
 }> {
   const limit = RATE_LIMITS[plan].performanceTestsPerDay;
-  
+
   if (limit === -1) {
-    return { allowed: true, used: 0, limit: -1 };
+    return { allowed: true, used: 0, limit: -1, resetAt: new Date() };
   }
-  
-  // Get current month's usage
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  
-  const usage = await db.query.usageTracking.findFirst({
-    where: and(
-      eq(schema.usageTracking.storeId, storeId),
-      eq(schema.usageTracking.month, currentMonth)
-    ),
+
+  // Get start of today (UTC)
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const tomorrow = new Date(today);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+  // Count today's performance snapshots for this store's themes
+  const store = await db.query.stores.findFirst({
+    where: eq(schema.stores.id, storeId),
+    with: { themes: true },
   });
-  
-  const used = usage?.performanceTestsCount || 0;
-  
-  // For daily limit, we divide monthly by 30
-  const dailyUsed = Math.floor(used / 30);
-  
+
+  if (!store || !store.themes?.length) {
+    return { allowed: true, used: 0, limit, resetAt: tomorrow };
+  }
+
+  let todayCount = 0;
+  for (const theme of store.themes) {
+    const snapshots = await db.query.performanceSnapshots.findMany({
+      where: and(
+        eq(schema.performanceSnapshots.themeId, theme.id),
+        gte(schema.performanceSnapshots.createdAt, today)
+      ),
+    });
+    todayCount += snapshots.length;
+  }
+
   return {
-    allowed: dailyUsed < limit,
-    used: dailyUsed,
+    allowed: todayCount < limit,
+    used: todayCount,
     limit,
+    resetAt: tomorrow,
   };
 }
 

@@ -38,7 +38,7 @@ export function getCorsHeaders(request?: Request): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': isAllowed ? origin : ALLOWED_ORIGINS[0],
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Shop-Domain, X-Requested-With',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
     'Access-Control-Allow-Credentials': 'true',
   };
 }
@@ -47,7 +47,7 @@ export function getCorsHeaders(request?: Request): Record<string, string> {
 export const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.NEXT_PUBLIC_APP_URL || 'https://thememetrics.de',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Shop-Domain, X-Requested-With',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
   'Access-Control-Allow-Credentials': 'true',
 };
 
@@ -107,67 +107,65 @@ export type AuthResult =
  */
 export async function authenticateRequest(request: NextRequest): Promise<AuthResult> {
   let shop: string | null = null;
-  let authMethod: 'session_token' | 'cookie' | 'header' = 'cookie';
+  let authMethod: 'session_token' | 'cookie' = 'cookie';
 
   // 1. Try Session Token from Authorization header (embedded app flow)
   const sessionToken = getSessionTokenFromRequest(request);
 
   if (sessionToken) {
+    console.log('[AUTH-DEBUG] Token present, len=' + sessionToken.length + ', prefix=' + sessionToken.substring(0, 20));
+    console.log('[AUTH-DEBUG] SECRET set=' + !!process.env.SHOPIFY_API_SECRET + ', len=' + (process.env.SHOPIFY_API_SECRET?.length || 0));
     const payload = verifySessionToken(sessionToken);
+    console.log('[AUTH-DEBUG] Verify result:', payload ? 'OK dest=' + payload.dest : 'FAILED');
 
     if (payload) {
       shop = getShopFromToken(payload);
       authMethod = 'session_token';
     }
-    // Session token invalid/expired - silently continue to fallback methods
-    // This can happen when tokens expire or during initial app load
+  } else {
+    const authH = request.headers.get('authorization');
+    const cookieH = request.headers.get('cookie');
+    console.log('[AUTH-DEBUG] No Bearer token. auth-header=' + (authH ? authH.substring(0, 30) : 'NONE') + ' cookie=' + (cookieH ? cookieH.substring(0, 50) : 'NONE'));
   }
 
-  // 2. Try X-Shop-Domain header (for API calls with shop context)
-  if (!shop) {
-    const shopHeader = request.headers.get('X-Shop-Domain');
-    if (shopHeader && isValidShopDomain(shopHeader)) {
-      shop = sanitizeShopDomain(shopHeader);
-      authMethod = 'header';
-    }
-  }
-
-  // 3. Try cookie fallback (non-embedded context) - verify HMAC signature
+  // 2. Try signed cookie fallback (non-embedded context)
   if (!shop) {
     const cookieStore = await cookies();
     const shopSession = cookieStore.get('shop_session')?.value;
 
     if (shopSession) {
-      // Support both signed (shop.signature) and legacy unsigned cookies
-      const dotIndex = shopSession.lastIndexOf('.');
-      if (dotIndex > 0) {
-        const cookieShop = shopSession.substring(0, dotIndex);
-        const cookieSignature = shopSession.substring(dotIndex + 1);
-        const sessionSecret = process.env.SESSION_SECRET || '';
-        const expectedSignature = crypto.createHmac('sha256', sessionSecret).update(cookieShop).digest('hex');
+      const sessionSecret = process.env.SESSION_SECRET;
+      if (!sessionSecret) {
+        console.error('CRITICAL: SESSION_SECRET environment variable is not configured');
+      } else {
+        const dotIndex = shopSession.lastIndexOf('.');
+        if (dotIndex > 0) {
+          const cookieShop = shopSession.substring(0, dotIndex);
+          const cookieSignature = shopSession.substring(dotIndex + 1);
+          const expectedSignature = crypto.createHmac('sha256', sessionSecret).update(cookieShop).digest('hex');
 
-        if (cookieSignature === expectedSignature && isValidShopDomain(cookieShop)) {
-          shop = sanitizeShopDomain(cookieShop);
-          authMethod = 'cookie';
+          // Timing-safe comparison to prevent timing oracle attacks
+          try {
+            const sigBuffer = Buffer.from(cookieSignature, 'hex');
+            const expectedBuffer = Buffer.from(expectedSignature, 'hex');
+            if (sigBuffer.length === expectedBuffer.length &&
+                crypto.timingSafeEqual(sigBuffer, expectedBuffer) &&
+                isValidShopDomain(cookieShop)) {
+              shop = sanitizeShopDomain(cookieShop);
+              authMethod = 'cookie';
+            }
+          } catch {
+            // Length mismatch or invalid hex — reject
+          }
         }
-      } else if (isValidShopDomain(shopSession)) {
-        // Legacy unsigned cookie — still accept but log for migration
-        shop = sanitizeShopDomain(shopSession);
-        authMethod = 'cookie';
+        // SECURITY: Unsigned cookies are no longer accepted
       }
     }
   }
 
-  // 4. Try query parameter (fallback for embedded app initial load)
-  if (!shop) {
-    const url = new URL(request.url);
-    const shopParam = url.searchParams.get('shop');
-
-    if (shopParam && isValidShopDomain(shopParam)) {
-      shop = sanitizeShopDomain(shopParam);
-      authMethod = 'header';
-    }
-  }
+  // SECURITY: X-Shop-Domain header and ?shop= query parameter fallbacks
+  // have been removed — they allowed unauthenticated access to any store's data.
+  // Only session tokens (from Shopify App Bridge) and signed cookies are accepted.
 
   if (!shop) {
     return {

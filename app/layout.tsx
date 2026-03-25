@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Suspense } from 'react';
+import Script from 'next/script';
 import { AppBridgeProvider } from '@/components/providers/AppBridgeProvider';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { LanguageProvider } from '@/components/providers/LanguageProvider';
-import { AppBridgeScript } from '@/components/providers/AppBridgeScript';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,10 +22,11 @@ export default function RootLayout({
   return (
     <html lang="de" suppressHydrationWarning>
       <head>
-        {/* App Bridge script only loads when shop param is present (embedded context) */}
-        <Suspense fallback={null}>
-          <AppBridgeScript apiKey={process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || ''} />
-        </Suspense>
+        <Script
+          id="shopify-app-bridge"
+          src={`https://cdn.shopify.com/shopifycloud/app-bridge.js?apiKey=${process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || ''}`}
+          strategy="beforeInteractive"
+        />
       </head>
       <body className={inter.className}>
         <ThemeProvider>

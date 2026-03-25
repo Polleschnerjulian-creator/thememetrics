@@ -9,8 +9,23 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
-  const secret = request.nextUrl.searchParams.get('secret');
-  if (secret !== process.env.CRON_SECRET) {
+  const authHeader = request.headers.get('authorization');
+  const secret = process.env.CRON_SECRET;
+  if (!secret || !authHeader) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const expected = `Bearer ${secret}`;
+  if (authHeader.length !== expected.length) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const { timingSafeEqual } = await import('crypto');
+    if (!timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

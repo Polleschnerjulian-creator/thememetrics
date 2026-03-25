@@ -85,11 +85,16 @@ export default function ClientDashboard() {
   const fetchData = async (pwd?: string) => {
     try {
       setLoading(true);
-      const url = pwd 
-        ? `/api/client?token=${token}&password=${encodeURIComponent(pwd)}`
-        : `/api/client?token=${token}`;
-      
-      const response = await fetch(url);
+      let response: Response;
+      if (pwd) {
+        response = await fetch('/api/client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, password: pwd }),
+        });
+      } else {
+        response = await fetch(`/api/client?token=${token}`);
+      }
       const result = await response.json();
 
       if (response.status === 401 && result.passwordProtected) {

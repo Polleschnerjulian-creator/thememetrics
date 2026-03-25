@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, Lock, Sparkles, Check, ArrowRight } from 'lucide-react';
 import { PLANS, PlanId } from '@/lib/billing';
+import { useAppBridge } from '@/components/providers/AppBridgeProvider';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ export function UpgradeModal({
   shop 
 }: UpgradeModalProps) {
   const [loading, setLoading] = useState(false);
+  const { authenticatedFetch } = useAppBridge();
 
   if (!isOpen) return null;
 
@@ -60,7 +62,7 @@ export function UpgradeModal({
   const handleUpgrade = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/billing', {
+      const response = await authenticatedFetch('/api/billing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: recommendedPlan, shop }),

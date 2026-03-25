@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { emailSubscriptions, stores, themeAnalyses, performanceSnapshots } from '@/lib/db/schema';
-import { eq, and, desc, gte } from 'drizzle-orm';
+import { eq, and, desc, gte, lte } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/resend';
 import { weeklyReportEmail } from '@/lib/email/templates';
 import { captureError } from '@/lib/monitoring';
@@ -28,9 +28,7 @@ export async function GET(request: NextRequest) {
   // Verify cron secret with timing-safe comparison
   const authHeader = request.headers.get('authorization');
   if (!verifyCronSecret(authHeader)) {
-    if (process.env.NODE_ENV === 'production') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
@@ -85,10 +83,10 @@ export async function GET(request: NextRequest) {
           .where(
             and(
               eq(themeAnalyses.storeId, subscription.storeId),
-              gte(themeAnalyses.analyzedAt, oneWeekAgo)
+              lte(themeAnalyses.analyzedAt, oneWeekAgo)
             )
           )
-          .orderBy(themeAnalyses.analyzedAt)
+          .orderBy(desc(themeAnalyses.analyzedAt))
           .limit(1);
 
         const currentScore = latestAnalysis?.overallScore || 0;

@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { captureError } from '@/lib/monitoring';
 import { authenticateRequest, withCors } from '@/lib/auth';
 
@@ -40,11 +40,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Dieser Code ist abgelaufen' }, { status: 400 });
     }
 
-    // Check max uses
-    if (promoCode.maxUses && (promoCode.usedCount || 0) >= promoCode.maxUses) {
-      return NextResponse.json({ error: 'Dieser Code wurde bereits zu oft eingelöst' }, { status: 400 });
-    }
-
     // Check if store already used this code
     const existingUse = await db.query.promoCodeUses.findFirst({
       where: and(
@@ -55,6 +50,39 @@ export async function POST(request: NextRequest) {
 
     if (existingUse) {
       return NextResponse.json({ error: 'Du hast diesen Code bereits eingelöst' }, { status: 400 });
+    }
+
+    // Atomically increment used_count ONLY if under maxUses limit
+    // PostgreSQL row-level locking prevents race conditions
+    const incrementResult = await db.execute<{ id: number }>(sql`
+      UPDATE promo_codes
+      SET used_count = COALESCE(used_count, 0) + 1
+      WHERE id = ${promoCode.id}
+        AND (max_uses IS NULL OR COALESCE(used_count, 0) < max_uses)
+      RETURNING id
+    `);
+
+    if (incrementResult.rows.length === 0) {
+      return NextResponse.json({ error: 'Dieser Code wurde bereits zu oft eingelöst' }, { status: 400 });
+    }
+
+    // Record the promo code use (unique constraint prevents double-redemption)
+    try {
+      await db.insert(schema.promoCodeUses).values({
+        promoCodeId: promoCode.id,
+        storeId: store.id,
+      });
+    } catch (insertError: any) {
+      // If unique constraint violation, another request already redeemed
+      if (insertError?.code === '23505') {
+        // Compensate: decrement the count we just incremented
+        await db.execute(sql`
+          UPDATE promo_codes SET used_count = GREATEST(COALESCE(used_count, 1) - 1, 0)
+          WHERE id = ${promoCode.id}
+        `);
+        return NextResponse.json({ error: 'Du hast diesen Code bereits eingelöst' }, { status: 400 });
+      }
+      throw insertError;
     }
 
     // Calculate expiration date for the subscription
@@ -85,16 +113,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Record the promo code use
-    await db.insert(schema.promoCodeUses).values({
-      promoCodeId: promoCode.id,
-      storeId: store.id,
-    });
-
-    // Increment used count
-    await db.update(schema.promoCodes)
-      .set({ usedCount: (promoCode.usedCount || 0) + 1 })
-      .where(eq(schema.promoCodes.id, promoCode.id));
+    // Also update stores.plan to keep both tables in sync
+    await db.update(schema.stores)
+      .set({ plan: promoCode.plan })
+      .where(eq(schema.stores.id, store.id));
 
     return NextResponse.json({
       success: true,

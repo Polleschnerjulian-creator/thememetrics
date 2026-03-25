@@ -43,6 +43,7 @@ function SettingsContent() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Load email preferences on mount
   useEffect(() => {
@@ -91,6 +92,7 @@ function SettingsContent() {
         setTimeout(() => setSaved(false), 2000);
       }
     } catch (error) {
+      setSaveError(isGerman ? 'Fehler beim Speichern. Bitte versuche es erneut.' : 'Failed to save. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -136,7 +138,7 @@ function SettingsContent() {
           <div className="flex items-center justify-between py-3 border-b border-border">
             <div>
               <p className="font-medium text-foreground">Plan</p>
-              <p className="text-sm text-muted-foreground">Starter (€29/{isGerman ? 'Monat' : 'month'})</p>
+              <p className="text-sm text-muted-foreground">{isGerman ? 'Über Shopify Admin verwaltet' : 'Managed via Shopify Admin'}</p>
             </div>
             <Link 
               href={`/dashboard/pricing?shop=${shop}`}
@@ -151,7 +153,7 @@ function SettingsContent() {
               <p className="font-medium text-foreground">
                 {isGerman ? 'Nächste Abrechnung' : 'Next Billing'}
               </p>
-              <p className="text-sm text-muted-foreground">15. Februar 2026</p>
+              <p className="text-sm text-muted-foreground">{isGerman ? 'Über Shopify Admin einsehbar' : 'Available via Shopify Admin'}</p>
             </div>
             <Link 
               href="#"
@@ -365,8 +367,8 @@ function SettingsContent() {
                   : 'Download all your analysis data as CSV'}
               </p>
             </div>
-            <button className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium">
-              {isGerman ? 'Exportieren' : 'Export'}
+            <button className="text-sm text-gray-400 cursor-not-allowed font-medium" disabled title={isGerman ? 'Bald verfügbar' : 'Coming soon'}>
+              {isGerman ? 'Bald verfügbar' : 'Coming soon'}
             </button>
           </div>
           
@@ -381,12 +383,19 @@ function SettingsContent() {
                   : 'Delete your account and all associated data'}
               </p>
             </div>
-            <button className="text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1">
-              <Trash2 className="w-4 h-4" /> {isGerman ? 'Löschen' : 'Delete'}
+            <button className="text-sm text-gray-400 cursor-not-allowed font-medium flex items-center gap-1" disabled title={isGerman ? 'Deinstalliere die App über den Shopify Admin' : 'Uninstall the app via Shopify Admin'}>
+              <Trash2 className="w-4 h-4" /> {isGerman ? 'Über Shopify Admin' : 'Via Shopify Admin'}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Save Error */}
+      {saveError && (
+        <div className="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm">
+          {saveError}
+        </div>
+      )}
 
       {/* Save Button */}
       <div className="flex justify-end">

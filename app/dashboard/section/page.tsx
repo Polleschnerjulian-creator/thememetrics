@@ -226,7 +226,7 @@ function SectionDetailContent() {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    const detectedShop = searchParams.get('shop') || getShopFromUrl() || 'thememetrics-test.myshopify.com';
+    const detectedShop = searchParams.get('shop') || getShopFromUrl() || '';
     setShop(detectedShop);
   }, [searchParams]);
 
@@ -243,16 +243,16 @@ function SectionDetailContent() {
               (s: SectionDetail) => s.name === sectionName
             );
             if (found) {
-              // Enrich with mock detailed data (in real app, this comes from API)
-              setSection({
+              // Use actual data from sections API
+              const enrichedSection = {
                 ...found,
-                linesOfCode: Math.floor(Math.random() * 300) + 50,
-                hasVideo: found.type === 'hero' || found.type === 'video',
-                hasAnimations: found.performanceScore < 60,
-                hasLazyLoading: found.performanceScore > 70,
-                estimatedLoadTime: Math.round((100 - found.performanceScore) * 15),
-                complexity: found.performanceScore < 40 ? 'high' : found.performanceScore < 70 ? 'medium' : 'low'
-              });
+                linesOfCode: found.linesOfCode || 0,
+                hasVideo: found.hasVideo || false,
+                hasAnimations: found.hasAnimations || false,
+                hasLazyLoading: found.hasLazyLoading || false,
+                estimatedLoadTime: found.estimatedLoadTimeMs || 0,
+              };
+              setSection(enrichedSection);
             }
           }
         }
