@@ -1,9 +1,14 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createShopifyClient } from '@/lib/shopify';
-import { 
-  analyzeAccessibility, 
+import {
+  fetchThemes,
+  fetchThemeFileList,
+  fetchThemeFileContents,
+  gidToId,
+} from '@/lib/shopify';
+import {
+  analyzeAccessibility,
   generateAccessibilityReport,
   SectionAccessibility,
 } from '@/lib/accessibility';
@@ -16,82 +21,79 @@ export async function OPTIONS(request: Request) {
 }
 
 async function runAccessibilityCheck(request: NextRequest): Promise<NextResponse> {
-  // Authenticate using session token or cookie fallback
   const authResult = await authenticateRequest(request);
-  
+
   if (!authResult.success) {
     return authErrorResponse(authResult);
   }
-  
+
   const { store } = authResult;
 
-  const client = createShopifyClient(store.shopDomain, store.accessToken);
-
-  // Get active theme
-  const { themes } = await client.get<any>('/themes.json');
-  const activeTheme = themes.find((t: any) => t.role === 'main');
+  // Fetch themes via GraphQL
+  const themes = await fetchThemes(store.shopDomain, store.accessToken);
+  const activeTheme = themes.find((t) => t.role === 'MAIN') ?? themes[0];
 
   if (!activeTheme) {
     return NextResponse.json({ error: 'No active theme found' }, { status: 404 });
   }
 
-  // Get all section files - sort alphabetically for consistent results
-  const { assets } = await client.get<any>(`/themes/${activeTheme.id}/assets.json`);
-  const sectionFiles = assets
-    .filter((a: any) => a.key.startsWith('sections/') && a.key.endsWith('.liquid'))
-    .sort((a: any, b: any) => a.key.localeCompare(b.key))
-    .slice(0, 30);
+  // Fetch file list
+  const allFiles = await fetchThemeFileList(
+    store.shopDomain,
+    store.accessToken,
+    activeTheme.id
+  );
+
+  // Select sections + the main layout file
+  const targetFilenames = [
+    'layout/theme.liquid',
+    ...allFiles
+      .filter((f) => f.filename.startsWith('sections/') && f.filename.endsWith('.liquid'))
+      .sort((a, b) => a.filename.localeCompare(b.filename))
+      .slice(0, 29) // +1 for layout = 30 total
+      .map((f) => f.filename),
+  ];
+
+  // Batch fetch all file contents in a single GraphQL call
+  const fileContents = await fetchThemeFileContents(
+    store.shopDomain,
+    store.accessToken,
+    activeTheme.id,
+    targetFilenames
+  );
 
   const sectionResults: SectionAccessibility[] = [];
   const analyzedSections: string[] = [];
   const failedSections: string[] = [];
 
-  async function fetchWithRetry(key: string, retries = 2): Promise<string | null> {
-    for (let i = 0; i <= retries; i++) {
-      try {
-        const { asset } = await client.get<any>(
-          `/themes/${activeTheme.id}/assets.json?asset[key]=${encodeURIComponent(key)}`
-        );
-        if (asset?.value) return asset.value;
-      } catch (err) {
-        if (i === retries) {
-          return null;
-        }
-        await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
-      }
-    }
-    return null;
-  }
-
-  const themeContent = await fetchWithRetry('layout/theme.liquid');
-  if (themeContent) {
-    const themeResult = analyzeAccessibility('theme.liquid (Layout)', themeContent);
-    sectionResults.push(themeResult);
-    analyzedSections.push('theme.liquid (Layout)');
-  } else {
-    failedSections.push('layout/theme.liquid');
-  }
-
-  for (const file of sectionFiles) {
-    const content = await fetchWithRetry(file.key);
-    
+  for (const file of fileContents) {
+    const content = file.body?.content;
     if (content) {
-      const sectionName = file.key.replace('sections/', '').replace('.liquid', '');
-      const result = analyzeAccessibility(sectionName, content);
+      const displayName =
+        file.filename === 'layout/theme.liquid'
+          ? 'theme.liquid (Layout)'
+          : file.filename.replace('sections/', '').replace('.liquid', '');
+
+      const result = analyzeAccessibility(displayName, content);
       sectionResults.push(result);
-      analyzedSections.push(sectionName);
+      analyzedSections.push(displayName);
     } else {
-      failedSections.push(file.key);
+      failedSections.push(file.filename);
     }
-    
-    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+
+  // Note files that weren't returned at all
+  for (const filename of targetFilenames) {
+    if (!fileContents.find((f) => f.filename === filename)) {
+      failedSections.push(filename);
+    }
   }
 
   const report = generateAccessibilityReport(sectionResults);
 
   return NextResponse.json({
     theme: {
-      id: activeTheme.id,
+      id: gidToId(activeTheme.id),
       name: activeTheme.name,
     },
     report,
@@ -101,7 +103,7 @@ async function runAccessibilityCheck(request: NextRequest): Promise<NextResponse
       sectionsFailed: failedSections.length,
       sectionsList: analyzedSections,
       failedList: failedSections,
-    }
+    },
   });
 }
 

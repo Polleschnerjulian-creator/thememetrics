@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { stores, themeAnalyses, sectionAnalyses } from '@/lib/db/schema';
+import { themeAnalyses, sectionAnalyses } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
-import { createShopifyClient } from '@/lib/shopify';
 import { captureError } from '@/lib/monitoring';
 import { authenticateRequest, withCors } from '@/lib/auth';
 
@@ -62,52 +61,6 @@ interface RevenueImpact {
   
   // Data source
   dataSource: 'shopify' | 'estimated';
-}
-
-// Fetch shop analytics from Shopify
-async function getShopAnalytics(shop: string, accessToken: string): Promise<ShopAnalytics | null> {
-  try {
-    const client = createShopifyClient(shop, accessToken);
-    
-    // Get orders from last 30 days
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const ordersResponse = await client.get<{ orders: any[] }>(
-      `/orders.json?status=any&created_at_min=${thirtyDaysAgo.toISOString()}&limit=250`
-    );
-    
-    const orders = ordersResponse.orders || [];
-    const ordersCount = orders.length;
-    
-    // Calculate metrics
-    const monthlyRevenue = orders.reduce((sum, order) => {
-      return sum + parseFloat(order.total_price || 0);
-    }, 0);
-    
-    const averageOrderValue = ordersCount > 0 ? monthlyRevenue / ordersCount : PERFORMANCE_BENCHMARKS.industryAvgAOV;
-    
-    // Estimate sessions based on industry conversion rate if we don't have analytics access
-    // Shopify Plus has analytics API, regular stores need estimation
-    const estimatedConversionRate = ordersCount > 0 
-      ? Math.min(0.05, Math.max(0.005, ordersCount / (ordersCount / PERFORMANCE_BENCHMARKS.industryAvgConversionRate)))
-      : PERFORMANCE_BENCHMARKS.industryAvgConversionRate;
-    
-    const estimatedSessions = ordersCount > 0 
-      ? Math.round(ordersCount / estimatedConversionRate)
-      : 5000; // Default estimate
-    
-    return {
-      monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
-      monthlySessions: estimatedSessions,
-      conversionRate: Math.round(estimatedConversionRate * 10000) / 100, // As percentage
-      averageOrderValue: Math.round(averageOrderValue * 100) / 100,
-      ordersCount,
-    };
-  } catch (error) {
-    captureError(error as Error, { tags: { function: 'getShopAnalytics' } });
-    return null;
-  }
 }
 
 // Calculate revenue impact
@@ -229,33 +182,17 @@ export async function GET(request: NextRequest) {
       recommendations: s.recommendations || [],
     }));
     
-    // Try to get real analytics from Shopify
-    let analytics: ShopAnalytics | null = null;
-    let dataSource: 'shopify' | 'estimated' = 'estimated';
-    
-    if (store.accessToken) {
-      analytics = await getShopAnalytics(
-        store.shopDomain,
-        store.accessToken
-      );
-      if (analytics && analytics.ordersCount > 0) {
-        dataSource = 'shopify';
-      }
-    }
-    
-    // Fallback to estimated data
-    if (!analytics) {
-      analytics = {
-        monthlyRevenue: 15000, // Conservative estimate
-        monthlySessions: 8000,
-        conversionRate: 2.1,
-        averageOrderValue: 85,
-        ordersCount: 0,
-      };
-    }
-    
+    // Use industry-average estimates (read_orders scope not requested)
+    const analytics: ShopAnalytics = {
+      monthlyRevenue: 15000, // Conservative estimate
+      monthlySessions: 8000,
+      conversionRate: 2.1,
+      averageOrderValue: 85,
+      ordersCount: 0,
+    };
+
     // Calculate revenue impact
-    const impact = calculateRevenueImpact(analytics, currentScore, sections, dataSource);
+    const impact = calculateRevenueImpact(analytics, currentScore, sections, 'estimated');
     
     return NextResponse.json(impact);
 

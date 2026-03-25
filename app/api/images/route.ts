@@ -3,9 +3,14 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, desc } from 'drizzle-orm';
-import { createShopifyClient } from '@/lib/shopify';
-import { 
-  analyzeImages, 
+import {
+  fetchThemes,
+  fetchThemeFileList,
+  fetchThemeFileContents,
+  gidToId,
+} from '@/lib/shopify';
+import {
+  analyzeImages,
   generateImageReport,
   SectionImageAnalysis,
 } from '@/lib/image-optimizer';
@@ -20,17 +25,19 @@ export async function OPTIONS(request: Request) {
 // Cache duration: 1 hour
 const CACHE_DURATION_MS = 60 * 60 * 1000;
 
-async function getOrCreateImageAnalysis(request: NextRequest, forceRefresh: boolean = false): Promise<NextResponse> {
-  // Authenticate using session token or cookie fallback
+async function getOrCreateImageAnalysis(
+  request: NextRequest,
+  forceRefresh: boolean = false
+): Promise<NextResponse> {
   const authResult = await authenticateRequest(request);
-  
+
   if (!authResult.success) {
     return authErrorResponse(authResult);
   }
-  
+
   const { store } = authResult;
 
-  // Check for cached analysis (unless force refresh)
+  // Return cached analysis if fresh enough
   if (!forceRefresh) {
     try {
       const cachedAnalysis = await db.query.imageAnalyses.findFirst({
@@ -42,94 +49,94 @@ async function getOrCreateImageAnalysis(request: NextRequest, forceRefresh: bool
         const cacheAge = Date.now() - new Date(cachedAnalysis.analyzedAt!).getTime();
         if (cacheAge < CACHE_DURATION_MS) {
           return NextResponse.json({
-            theme: {
-              id: cachedAnalysis.themeId,
-              name: cachedAnalysis.themeName,
-            },
+            theme: { id: cachedAnalysis.themeId, name: cachedAnalysis.themeName },
             report: cachedAnalysis.report,
             analyzedAt: cachedAnalysis.analyzedAt,
             cached: true,
           });
         }
       }
-    } catch (err) {
-      // Cache retrieval failed, will run fresh analysis
+    } catch {
+      // Cache retrieval failed — run fresh analysis
     }
   }
 
-  // Run fresh analysis
-  const client = createShopifyClient(store.shopDomain, store.accessToken);
-
-  const { themes } = await client.get<any>('/themes.json');
-  const activeTheme = themes.find((t: any) => t.role === 'main');
+  // Fetch themes via GraphQL
+  const themes = await fetchThemes(store.shopDomain, store.accessToken);
+  const activeTheme = themes.find((t) => t.role === 'MAIN') ?? themes[0];
 
   if (!activeTheme) {
     return NextResponse.json({ error: 'No active theme found' }, { status: 404 });
   }
 
-  const { assets } = await client.get<any>(`/themes/${activeTheme.id}/assets.json`);
-  const sectionFiles = assets
-    .filter((a: any) => a.key.startsWith('sections/') && a.key.endsWith('.liquid'))
-    .sort((a: any, b: any) => a.key.localeCompare(b.key))
-    .slice(0, 30);
+  // Fetch file list
+  const allFiles = await fetchThemeFileList(
+    store.shopDomain,
+    store.accessToken,
+    activeTheme.id
+  );
 
-  async function fetchWithRetry(key: string, retries = 2): Promise<string | null> {
-    for (let i = 0; i <= retries; i++) {
-      try {
-        const { asset } = await client.get<any>(
-          `/themes/${activeTheme.id}/assets.json?asset[key]=${encodeURIComponent(key)}`
-        );
-        if (asset?.value) return asset.value;
-      } catch (err) {
-        if (i === retries) return null;
-        await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
-      }
-    }
-    return null;
-  }
+  // Section files (up to 30)
+  const sectionFilenames = allFiles
+    .filter((f) => f.filename.startsWith('sections/') && f.filename.endsWith('.liquid'))
+    .sort((a, b) => a.filename.localeCompare(b.filename))
+    .slice(0, 30)
+    .map((f) => f.filename);
+
+  // Image-related snippet files (up to 10)
+  const snippetFilenames = allFiles
+    .filter(
+      (f) =>
+        f.filename.startsWith('snippets/') &&
+        f.filename.endsWith('.liquid') &&
+        (f.filename.toLowerCase().includes('image') ||
+          f.filename.toLowerCase().includes('img') ||
+          f.filename.toLowerCase().includes('media') ||
+          f.filename.toLowerCase().includes('picture'))
+    )
+    .sort((a, b) => a.filename.localeCompare(b.filename))
+    .slice(0, 10)
+    .map((f) => f.filename);
+
+  const targetFilenames = [...sectionFilenames, ...snippetFilenames];
+
+  // Batch fetch all file contents in a single GraphQL call
+  const fileContents = await fetchThemeFileContents(
+    store.shopDomain,
+    store.accessToken,
+    activeTheme.id,
+    targetFilenames
+  );
 
   const sectionResults: SectionImageAnalysis[] = [];
 
-  for (const file of sectionFiles) {
-    const content = await fetchWithRetry(file.key);
-    if (content) {
-      const sectionName = file.key.replace('sections/', '').replace('.liquid', '');
-      const result = analyzeImages(sectionName, content);
+  for (const file of fileContents) {
+    const content = file.body?.content;
+    if (!content) continue;
+
+    const isSnippet = file.filename.startsWith('snippets/');
+    const displayName =
+      file.filename
+        .replace('sections/', '')
+        .replace('snippets/', '')
+        .replace('.liquid', '') + (isSnippet ? ' (snippet)' : '');
+
+    const result = analyzeImages(displayName, content);
+
+    // Only include snippets that actually have image issues
+    if (!isSnippet || result.issues.length > 0 || result.imageCount > 0) {
       sectionResults.push(result);
     }
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
-
-  const snippetFiles = assets
-    .filter((a: any) => a.key.startsWith('snippets/') && a.key.endsWith('.liquid'))
-    .filter((a: any) => 
-      a.key.toLowerCase().includes('image') || 
-      a.key.toLowerCase().includes('img') ||
-      a.key.toLowerCase().includes('media') ||
-      a.key.toLowerCase().includes('picture')
-    )
-    .sort((a: any, b: any) => a.key.localeCompare(b.key))
-    .slice(0, 10);
-
-  for (const file of snippetFiles) {
-    const content = await fetchWithRetry(file.key);
-    if (content) {
-      const snippetName = file.key.replace('snippets/', '').replace('.liquid', '') + ' (snippet)';
-      const result = analyzeImages(snippetName, content);
-      if (result.issues.length > 0 || result.imageCount > 0) {
-        sectionResults.push(result);
-      }
-    }
-    await new Promise(resolve => setTimeout(resolve, 50));
   }
 
   const report = generateImageReport(sectionResults);
   const now = new Date();
+  const themeNumericId = gidToId(activeTheme.id);
 
   try {
     await db.insert(schema.imageAnalyses).values({
       storeId: store.id,
-      themeId: String(activeTheme.id),
+      themeId: themeNumericId,
       themeName: activeTheme.name,
       score: report.score,
       totalImages: report.totalImages,
@@ -149,10 +156,7 @@ async function getOrCreateImageAnalysis(request: NextRequest, forceRefresh: bool
   }
 
   return NextResponse.json({
-    theme: {
-      id: activeTheme.id,
-      name: activeTheme.name,
-    },
+    theme: { id: themeNumericId, name: activeTheme.name },
     report,
     analyzedAt: now.toISOString(),
     cached: false,
@@ -163,7 +167,6 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const refresh = searchParams.get('refresh') === 'true';
-    
     const response = await getOrCreateImageAnalysis(request, refresh);
     return withCors(response);
   } catch (error) {

@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
     if (isNewInstall) {
       (async () => {
         try {
-          const shopDataResponse = await fetch(`https://${shop}/admin/api/2024-01/shop.json`, {
+          const shopDataResponse = await fetch(`https://${shop}/admin/api/2025-01/shop.json`, {
             headers: {
               'X-Shopify-Access-Token': accessToken,
               'Content-Type': 'application/json',
